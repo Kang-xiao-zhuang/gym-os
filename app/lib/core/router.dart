@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/auth/login_page.dart';
 import '../features/auth/register_page.dart';
+import '../features/body/body_page.dart';
 import '../features/exercise/exercise.dart';
 import '../features/exercise/exercise_detail_page.dart';
 import '../features/exercise/exercise_form_page.dart';
@@ -48,6 +49,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => ExerciseFormPage(exercise: state.extra is Exercise ? state.extra as Exercise : null),
       ),
       GoRoute(path: '/plans', builder: (_, _) => const PlansPage()),
+      GoRoute(path: '/body', builder: (_, _) => const BodyPage()),
       GoRoute(
         path: '/plan-detail',
         builder: (_, state) => state.extra is Plan ? PlanDetailPage(plan: state.extra as Plan) : const PlansPage(),

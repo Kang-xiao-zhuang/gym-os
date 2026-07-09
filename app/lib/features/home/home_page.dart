@@ -83,8 +83,8 @@ class HomePage extends ConsumerWidget {
               emoji: '📊',
               color: const Color(0xFF14B8A6),
               title: '身体数据',
-              subtitle: '记录体重、围度、体脂',
-              comingSoon: true,
+              subtitle: '体重、围度、体脂趋势',
+              onTap: () => context.push('/body'),
             ),
           ],
         ),
@@ -100,7 +100,6 @@ class _FeatureCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.onTap,
-    this.comingSoon = false,
   });
 
   final String emoji;
@@ -108,7 +107,6 @@ class _FeatureCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
-  final bool comingSoon;
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +115,7 @@ class _FeatureCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppTheme.radius),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppTheme.radius),
-        onTap: comingSoon ? null : onTap,
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(AppTheme.pad),
           child: Row(
@@ -140,14 +138,7 @@ class _FeatureCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (comingSoon)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                  child: Text('即将上线', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
-                )
-              else
-                Icon(Icons.arrow_forward_ios_rounded, size: 15, color: color),
+              Icon(Icons.arrow_forward_ios_rounded, size: 15, color: color),
             ],
           ),
         ),
