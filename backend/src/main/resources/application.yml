@@ -26,6 +26,8 @@ spring:
         jwt:
           jwk-set-uri: https://qgbtrgkiqgccmlqjxxfu.supabase.co/auth/v1/.well-known/jwks.json
           audiences: authenticated
+          # Supabase signs with ES256; without this the decoder defaults to RS256 and rejects the token.
+          jws-algorithms: ES256
 
 logging:
   level:
