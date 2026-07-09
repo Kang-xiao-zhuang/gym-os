@@ -246,16 +246,34 @@ class _ChecklistState extends ConsumerState<_Checklist> {
           children: [
             Row(
               children: [
-                Text(allDone ? '今天练完啦 🎉' : '已完成 $doneCount / ${items.length}',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder: (child, anim) =>
+                      ScaleTransition(scale: anim, child: FadeTransition(opacity: anim, child: child)),
+                  child: Text(
+                    allDone ? '今天练完啦 🎉' : '已完成 $doneCount / ${items.length}',
+                    key: ValueKey(allDone),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: allDone ? Colors.green : null,
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: doneCount / items.length,
-                      minHeight: 8,
-                      backgroundColor: Colors.grey.shade200,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: doneCount / items.length),
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOut,
+                      builder: (context, v, _) => LinearProgressIndicator(
+                        value: v,
+                        minHeight: 8,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color: allDone ? Colors.green : null,
+                      ),
                     ),
                   ),
                 ),
@@ -282,9 +300,14 @@ class _ChecklistState extends ConsumerState<_Checklist> {
                     if (e.volume.isNotEmpty) e.volume,
                     if (e.restSeconds != null) '歇 ${e.restSeconds}s',
                   ].join('  ·  ')),
-                  trailing: Icon(
-                    isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                    color: isDone ? Colors.green : Colors.grey.shade400,
+                  trailing: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                    child: Icon(
+                      isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      key: ValueKey(isDone),
+                      color: isDone ? Colors.green : Colors.grey.shade400,
+                    ),
                   ),
                 ),
               );

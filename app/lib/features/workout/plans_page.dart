@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import 'workout_models.dart';
 import 'workout_providers.dart';
 import 'workout_repository.dart';
@@ -73,11 +74,17 @@ class PlansPage extends ConsumerWidget {
         label: const Text('新建计划'),
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败：$e')),
+        loading: () => const LoadingView(),
+        error: (e, _) => EmptyView(emoji: '😵', title: '加载失败', subtitle: '$e'),
         data: (plans) {
           if (plans.isEmpty) {
-            return const Center(child: Text('还没有计划，点右下角新建一个 ✨'));
+            return EmptyView(
+              emoji: '📅',
+              title: '还没有训练计划',
+              subtitle: '点右下角新建一个，开始编排',
+              actionLabel: '新建计划',
+              onAction: () => _createDialog(context, ref),
+            );
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(plansProvider),

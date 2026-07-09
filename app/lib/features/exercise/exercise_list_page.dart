@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/body_part.dart';
 import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import 'exercise.dart';
 import 'exercise_providers.dart';
 
@@ -30,11 +31,23 @@ class ExerciseListPage extends ConsumerWidget {
         label: const Text('新增'),
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _ErrorView(message: '$e', onRetry: () => ref.invalidate(exerciseListProvider)),
+        loading: () => const LoadingView(),
+        error: (e, _) => EmptyView(
+          emoji: '😵',
+          title: '加载失败',
+          subtitle: '$e',
+          actionLabel: '重试',
+          onAction: () => ref.invalidate(exerciseListProvider),
+        ),
         data: (list) {
           if (list.isEmpty) {
-            return const Center(child: Text('还没有动作，去加一个吧 ✨'));
+            return EmptyView(
+              emoji: '💪',
+              title: '还没有动作',
+              subtitle: '点右下角新增第一个动作',
+              actionLabel: '新增动作',
+              onAction: () => context.push('/exercise-form'),
+            );
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(exerciseListProvider),
@@ -163,28 +176,3 @@ class _Chip extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('😵', style: TextStyle(fontSize: 40)),
-            const SizedBox(height: 12),
-            Text('加载失败：$message', textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child: const Text('重试')),
-          ],
-        ),
-      ),
-    );
-  }
-}

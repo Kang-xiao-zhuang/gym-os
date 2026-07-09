@@ -1,32 +1,37 @@
 import 'package:flutter/material.dart';
 
-/// The app's single source of visual truth: a refined Material 3 theme —
-/// soft rounded cards, restrained shadows, generous spacing, calm indigo accent.
+/// The app's single source of visual truth: a refined Material 3 theme with a
+/// calm indigo accent, soft rounded surfaces, and full light + dark support.
 class AppTheme {
-  static const Color _seed = Color(0xFF4F46E5); // indigo
+  static const Color seed = Color(0xFF6366F1); // indigo
 
-  // Spacing scale — use these instead of magic numbers.
+  // Spacing / shape scale — use these instead of magic numbers.
   static const double gap = 12;
   static const double pad = 16;
   static const double radius = 16;
 
   static ThemeData light() {
-    final scheme = ColorScheme.fromSeed(seedColor: _seed, brightness: Brightness.light);
-    return _base(scheme, const Color(0xFFF7F7FB));
+    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light);
+    return _base(scheme, const Color(0xFFF6F6FA));
   }
 
   static ThemeData dark() {
-    final scheme = ColorScheme.fromSeed(seedColor: _seed, brightness: Brightness.dark);
-    return _base(scheme, scheme.surface);
+    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
+    return _base(scheme, const Color(0xFF121216));
   }
 
   static ThemeData _base(ColorScheme scheme, Color scaffoldBg) {
     final radiusAll = BorderRadius.circular(radius);
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: scheme,
+    final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: scheme.brightness);
+
+    return base.copyWith(
       scaffoldBackgroundColor: scaffoldBg,
       splashFactory: InkSparkle.splashFactory,
+      textTheme: base.textTheme.copyWith(
+        headlineSmall: base.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.4),
+        titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.2),
+        titleMedium: base.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: scaffoldBg,
         surfaceTintColor: Colors.transparent,
@@ -45,11 +50,26 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shadowColor: Colors.black.withValues(alpha: 0.06),
         shape: RoundedRectangleBorder(
           borderRadius: radiusAll,
           side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
         ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: scheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 3,
+        height: 64,
+        indicatorColor: scheme.primary.withValues(alpha: 0.14),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
+              fontSize: 12,
+              fontWeight: s.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
+              color: s.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant,
+            )),
+        iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
+              color: s.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant,
+            )),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -57,6 +77,15 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
+      ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+      ),
+      dialogTheme: DialogThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -69,9 +98,7 @@ class AppTheme {
           borderSide: BorderSide(color: scheme.primary, width: 1.5),
         ),
       ),
-      listTileTheme: const ListTileThemeData(
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      ),
+      listTileTheme: const ListTileThemeData(contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4)),
       dividerTheme: DividerThemeData(color: scheme.outlineVariant.withValues(alpha: 0.5), space: 1),
     );
   }

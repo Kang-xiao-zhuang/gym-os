@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
+import '../../core/widgets.dart';
 import 'body_providers.dart';
 import 'body_repository.dart';
 import 'measurement.dart';
@@ -83,11 +84,17 @@ class BodyPage extends ConsumerWidget {
         label: const Text('记录'),
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败：$e')),
+        loading: () => const LoadingView(),
+        error: (e, _) => EmptyView(emoji: '😵', title: '加载失败', subtitle: '$e'),
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('还没有数据，点右下角记录第一条 📊'));
+            return EmptyView(
+              emoji: '📊',
+              title: '还没有身体数据',
+              subtitle: '记录第一条，开始追踪进度',
+              actionLabel: '记录',
+              onAction: () => _record(context, ref),
+            );
           }
           final latest = items.last;
           final weighed = items.where((m) => m.weight != null).toList();
