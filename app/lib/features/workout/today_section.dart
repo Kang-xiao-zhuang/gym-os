@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/body_part.dart';
+import 'rest_timer.dart';
 import 'workout_models.dart';
 import 'workout_providers.dart';
 import 'workout_repository.dart';
@@ -212,6 +215,9 @@ class _Checklist extends ConsumerStatefulWidget {
 
 class _ChecklistState extends ConsumerState<_Checklist> {
   Set<String> _done = {};
+  final DateTime _start = DateTime.now();
+  Duration _elapsed = Duration.zero;
+  Timer? _tick;
 
   @override
   void initState() {
@@ -219,6 +225,20 @@ class _ChecklistState extends ConsumerState<_Checklist> {
     CompletionStore.load(widget.dayId).then((s) {
       if (mounted) setState(() => _done = s);
     });
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _elapsed = DateTime.now().difference(_start));
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  String get _elapsedText {
+    final s = _elapsed.inSeconds;
+    return '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
   }
 
   void _toggle(String id) {
@@ -244,6 +264,15 @@ class _ChecklistState extends ConsumerState<_Checklist> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Icon(Icons.timer_outlined, size: 15, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text('训练中 $_elapsedText',
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5, fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 AnimatedSwitcher(
@@ -300,14 +329,25 @@ class _ChecklistState extends ConsumerState<_Checklist> {
                     if (e.volume.isNotEmpty) e.volume,
                     if (e.restSeconds != null) '歇 ${e.restSeconds}s',
                   ].join('  ·  ')),
-                  trailing: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                    child: Icon(
-                      isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                      key: ValueKey(isDone),
-                      color: isDone ? Colors.green : Colors.grey.shade400,
-                    ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: '组间休息',
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(Icons.timer_outlined, size: 20, color: Colors.grey.shade500),
+                        onPressed: () => showRestTimer(context, e.restSeconds ?? 90),
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                        child: Icon(
+                          isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                          key: ValueKey(isDone),
+                          color: isDone ? Colors.green : Colors.grey.shade400,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );

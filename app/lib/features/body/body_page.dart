@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import 'body_providers.dart';
+import 'goal_provider.dart';
 import 'body_repository.dart';
 import 'measurement.dart';
 
@@ -36,6 +37,39 @@ class BodyPage extends ConsumerStatefulWidget {
 
 class _BodyPageState extends ConsumerState<BodyPage> {
   String _metricKey = 'weight';
+
+  Future<void> _editGoal() async {
+    final current = ref.read(goalWeightProvider);
+    final c = TextEditingController(text: current?.toStringAsFixed(1) ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('设定目标体重 🎯'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: '目标体重 kg', hintText: '例如：70'),
+        ),
+        actions: [
+          if (current != null)
+            TextButton(
+              onPressed: () {
+                ref.read(goalWeightProvider.notifier).set(null);
+                Navigator.pop(context, false);
+              },
+              child: const Text('清除'),
+            ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('保存')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      final v = double.tryParse(c.text.trim());
+      if (v != null) ref.read(goalWeightProvider.notifier).set(v);
+    }
+  }
 
   Future<void> _record() async {
     final fields = {for (final m in _metrics) m.key: TextEditingController()};
@@ -112,12 +146,17 @@ class _BodyPageState extends ConsumerState<BodyPage> {
           final selected = _metrics.firstWhere((m) => m.key == _metricKey);
           final series = items.where((e) => e.valueOf(_metricKey) != null).toList();
 
+          final goal = ref.watch(goalWeightProvider);
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(measurementsProvider),
             child: ListView(
               padding: const EdgeInsets.all(AppTheme.pad),
               children: [
-                _Hero(metric: _metrics.first, series: items.where((e) => e.weight != null).toList()),
+                _GoalHero(
+                  weights: items.where((e) => e.weight != null).toList(),
+                  goal: goal,
+                  onEdit: _editGoal,
+                ),
                 const SizedBox(height: 20),
                 Text('  趋势', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 10),
@@ -164,18 +203,34 @@ class _BodyPageState extends ConsumerState<BodyPage> {
   }
 }
 
-/// Gradient headline card for weight (with latest value + delta).
-class _Hero extends StatelessWidget {
-  const _Hero({required this.metric, required this.series});
+/// Teal gradient headline: current weight + delta, and a goal ring if a target
+/// weight is set (progress from start weight → target).
+class _GoalHero extends StatelessWidget {
+  const _GoalHero({required this.weights, required this.goal, required this.onEdit});
 
-  final _Metric metric;
-  final List<Measurement> series;
+  final List<Measurement> weights;
+  final double? goal;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
-    final latest = series.isNotEmpty ? series.last.weight : null;
+    final current = weights.isNotEmpty ? weights.last.weight : null;
     double? delta;
-    if (series.length >= 2) delta = series.last.weight! - series[series.length - 2].weight!;
+    if (weights.length >= 2) delta = weights.last.weight! - weights[weights.length - 2].weight!;
+
+    double? progress;
+    if (goal != null && current != null && weights.isNotEmpty) {
+      final start = weights.first.weight!;
+      if ((start - goal!).abs() < 0.01) {
+        progress = 1;
+      } else if (goal! < start) {
+        progress = (start - current) / (start - goal!);
+      } else {
+        progress = (current - start) / (goal! - start);
+      }
+      progress = progress.clamp(0.0, 1.0);
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -191,25 +246,78 @@ class _Hero extends StatelessWidget {
         ],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (progress != null)
+            SizedBox(
+              width: 88,
+              height: 88,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: progress),
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOut,
+                    builder: (_, v, _) => SizedBox(
+                      width: 88,
+                      height: 88,
+                      child: CircularProgressIndicator(
+                        value: v,
+                        strokeWidth: 9,
+                        strokeCap: StrokeCap.round,
+                        color: Colors.white,
+                        backgroundColor: Colors.white.withValues(alpha: 0.25),
+                      ),
+                    ),
+                  ),
+                  Text('${(progress * 100).round()}%',
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+                ],
+              ),
+            )
+          else
+            const Text('⚖️', style: TextStyle(fontSize: 44)),
+          const SizedBox(width: 18),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('当前体重', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                const SizedBox(height: 6),
-                Text(latest != null ? '${latest.toStringAsFixed(1)} kg' : '— kg',
-                    style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text(current != null ? '${current.toStringAsFixed(1)} kg' : '— kg',
+                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800)),
                 if (delta != null) ...[
-                  const SizedBox(height: 8),
-                  Text('${delta <= 0 ? '↓ 掉了' : '↑ 涨了'} ${delta.abs().toStringAsFixed(1)} kg（比上次）',
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text('${delta <= 0 ? '↓ 掉了' : '↑ 涨了'} ${delta.abs().toStringAsFixed(1)} kg',
+                      style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
                 ],
+                const SizedBox(height: 8),
+                if (goal != null)
+                  Row(
+                    children: [
+                      Text('🎯 目标 ${goal!.toStringAsFixed(1)} kg',
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 4),
+                      InkWell(onTap: onEdit, child: const Icon(Icons.edit, size: 15, color: Colors.white70)),
+                    ],
+                  )
+                else
+                  SizedBox(
+                    height: 34,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF0D9488),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        minimumSize: Size.zero,
+                      ),
+                      onPressed: onEdit,
+                      child: const Text('🎯 设定目标'),
+                    ),
+                  ),
               ],
             ),
           ),
-          const Text('⚖️', style: TextStyle(fontSize: 44)),
         ],
       ),
     );
