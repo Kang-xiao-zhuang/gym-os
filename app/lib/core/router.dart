@@ -12,6 +12,10 @@ import '../features/exercise/exercise_detail_page.dart';
 import '../features/exercise/exercise_form_page.dart';
 import '../features/exercise/exercise_list_page.dart';
 import '../features/home/home_page.dart';
+import '../features/workout/day_detail_page.dart';
+import '../features/workout/plan_detail_page.dart';
+import '../features/workout/plans_page.dart';
+import '../features/workout/workout_models.dart';
 
 /// App router. Redirects unauthenticated users to /login and re-runs whenever
 /// Supabase's auth state changes (login / logout).
@@ -43,6 +47,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/exercise-form',
         builder: (_, state) => ExerciseFormPage(exercise: state.extra is Exercise ? state.extra as Exercise : null),
+      ),
+      GoRoute(path: '/plans', builder: (_, _) => const PlansPage()),
+      GoRoute(
+        path: '/plan-detail',
+        builder: (_, state) => state.extra is Plan ? PlanDetailPage(plan: state.extra as Plan) : const PlansPage(),
+      ),
+      GoRoute(
+        path: '/day-detail',
+        builder: (_, state) => state.extra is Day ? DayDetailPage(day: state.extra as Day) : const PlansPage(),
       ),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),

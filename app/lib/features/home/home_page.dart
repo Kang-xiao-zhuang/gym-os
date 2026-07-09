@@ -74,8 +74,8 @@ class HomePage extends ConsumerWidget {
               emoji: '📅',
               color: const Color(0xFFF97316),
               title: '训练计划',
-              subtitle: '按周排课，跟着练',
-              comingSoon: true,
+              subtitle: '编排每天要练的动作',
+              onTap: () => context.push('/plans'),
             ),
             const SizedBox(height: AppTheme.gap),
             _FeatureCard(
