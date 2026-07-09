@@ -12,7 +12,6 @@ import '../features/exercise/exercise_detail_page.dart';
 import '../features/exercise/exercise_form_page.dart';
 import '../features/exercise/exercise_list_page.dart';
 import '../features/home/home_page.dart';
-import '../features/workout/day_detail_page.dart';
 import '../features/workout/plan_detail_page.dart';
 import '../features/workout/plans_page.dart';
 import '../features/workout/workout_models.dart';
@@ -52,10 +51,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/plan-detail',
         builder: (_, state) => state.extra is Plan ? PlanDetailPage(plan: state.extra as Plan) : const PlansPage(),
-      ),
-      GoRoute(
-        path: '/day-detail',
-        builder: (_, state) => state.extra is Day ? DayDetailPage(day: state.extra as Day) : const PlansPage(),
       ),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
