@@ -3,21 +3,19 @@ package com.zk.gymos.common;
 public class Results {
 
     public static <T> Result<T> success(T data) {
-
-        return new Result<>(200, "success", data);
-
+        return new Result<>(ResultCode.SUCCESS, "success", data);
     }
 
     public static Result<Void> success() {
-
-        return new Result<>(200, "success", null);
-
+        return new Result<>(ResultCode.SUCCESS, "success", null);
     }
 
     public static Result<Void> fail(String msg) {
+        return new Result<>(ResultCode.FAIL, msg, null);
+    }
 
-        return new Result<>(500, msg, null);
-
+    public static Result<Void> fail(int code, String msg) {
+        return new Result<>(code, msg, null);
     }
 
 }

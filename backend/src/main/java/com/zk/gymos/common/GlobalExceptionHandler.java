@@ -13,6 +13,12 @@ import org.springframework.web.server.ResponseStatusException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /** Expected business failures thrown by the service layer → their own code. */
+    @ExceptionHandler(BusinessException.class)
+    public Result<Void> handleBusiness(BusinessException e) {
+        return new Result<>(e.getCode(), e.getMessage(), null);
+    }
+
     /** Bean-validation failures (@Valid on a request body) → 400 + the first field message. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public Result<Void> handleValidation(MethodArgumentNotValidException e) {

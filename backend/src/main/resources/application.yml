@@ -17,7 +17,15 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Validate Supabase-issued JWTs (ES256, verified against the project's JWKS endpoint).
+  # No shared secret needed. `sub` = the user's uuid; `aud` = authenticated.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: https://qgbtrgkiqgccmlqjxxfu.supabase.co/auth/v1/.well-known/jwks.json
+          audiences: authenticated
 
 logging:
   level:

@@ -7,11 +7,12 @@ import jakarta.persistence.PreUpdate;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * Shared audit columns. Only extend this on tables that actually have BOTH
  * created_at AND updated_at (with ddl-auto=validate a missing column fails startup).
+ * Columns are {@code timestamptz} in Supabase, hence {@link OffsetDateTime}.
  */
 @Getter
 @Setter
@@ -19,15 +20,15 @@ import java.time.LocalDateTime;
 public abstract class BaseEntity {
 
     @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 
     /** JPA calls this right before the first INSERT. */
     @PrePersist
     void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now();
         if (createdAt == null) createdAt = now;
         updatedAt = now;
     }
@@ -35,6 +36,6 @@ public abstract class BaseEntity {
     /** JPA calls this right before every UPDATE. */
     @PreUpdate
     void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = OffsetDateTime.now();
     }
 }
