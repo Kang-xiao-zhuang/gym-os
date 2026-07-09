@@ -35,6 +35,11 @@ class ApiClient {
     return _unwrap(res);
   }
 
+  static Future<dynamic> delete(String path) async {
+    final res = await http.delete(Uri.parse('${AppConfig.apiBaseUrl}$path'), headers: _headers());
+    return _unwrap(res);
+  }
+
   /// Unwrap the backend's uniform Result envelope; throw [ApiException] unless code == 200.
   static dynamic _unwrap(http.Response res) {
     final body = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;

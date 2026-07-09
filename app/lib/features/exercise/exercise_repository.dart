@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/api_client.dart';
-import 'exercise.dart';
 
 /// Storage + backend operations for exercises.
 class ExerciseRepository {
@@ -28,16 +27,17 @@ class ExerciseRepository {
     return '$url?v=${DateTime.now().millisecondsSinceEpoch}';
   }
 
-  /// PUT the exercise back to the backend with a new [imageUrl].
-  static Future<void> updateImageUrl(Exercise e, String imageUrl) async {
-    await ApiClient.put('/api/exercises/${e.id}', {
-      'name': e.name,
-      'bodyPart': e.bodyPart,
-      'equipment': e.equipment,
-      'difficulty': e.difficulty,
-      'description': e.description,
-      'imageUrl': imageUrl,
-      'videoUrl': e.videoUrl,
-    });
+  /// Create an exercise; returns the new id.
+  static Future<String> create(Map<String, dynamic> fields) async {
+    final data = await ApiClient.post('/api/exercises', fields) as Map<String, dynamic>;
+    return data['id'] as String;
+  }
+
+  static Future<void> update(String id, Map<String, dynamic> fields) async {
+    await ApiClient.put('/api/exercises/$id', fields);
+  }
+
+  static Future<void> remove(String id) async {
+    await ApiClient.delete('/api/exercises/$id');
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/body_part.dart';
@@ -28,12 +29,21 @@ class _ExerciseDetailPageState extends ConsumerState<ExerciseDetailPage> {
     setState(() => _uploading = true);
     try {
       final bytes = await picked.readAsBytes();
+      final e = widget.exercise;
       final url = await ExerciseRepository.uploadImage(
-        widget.exercise.id,
+        e.id,
         bytes,
         contentType: picked.mimeType ?? 'image/jpeg',
       );
-      await ExerciseRepository.updateImageUrl(widget.exercise, url);
+      await ExerciseRepository.update(e.id, {
+        'name': e.name,
+        'bodyPart': e.bodyPart,
+        'equipment': e.equipment,
+        'difficulty': e.difficulty,
+        'description': e.description,
+        'imageUrl': url,
+        'videoUrl': e.videoUrl,
+      });
       ref.invalidate(exerciseListProvider);
       if (mounted) setState(() => _imageUrl = url);
       _toast('图片已更新 ✅');
@@ -54,7 +64,16 @@ class _ExerciseDetailPageState extends ConsumerState<ExerciseDetailPage> {
     final e = widget.exercise;
     final s = bodyPartStyle(e.bodyPart);
     return Scaffold(
-      appBar: AppBar(title: Text(e.name)),
+      appBar: AppBar(
+        title: Text(e.name),
+        actions: [
+          IconButton(
+            tooltip: '编辑',
+            icon: const Icon(Icons.edit_rounded),
+            onPressed: () => context.push('/exercise-form', extra: e),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(AppTheme.pad),
         children: [

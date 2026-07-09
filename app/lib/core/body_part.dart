@@ -36,3 +36,7 @@ String difficultyFlames(int? level) {
   final n = (level ?? 0).clamp(0, 5);
   return '🔥' * n;
 }
+
+/// Selectable options for the exercise form.
+const List<String> kBodyParts = ['胸', '背', '腿', '肩', '核心', '手臂', '有氧', '全身'];
+const List<String> kEquipments = ['杠铃', '哑铃', '器械', '自重', '绳索', '壶铃', '弹力带'];

@@ -24,6 +24,11 @@ class ExerciseListPage extends ConsumerWidget {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/exercise-form'),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('新增'),
+      ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorView(message: '$e', onRetry: () => ref.invalidate(exerciseListProvider)),

@@ -9,6 +9,7 @@ import '../features/auth/login_page.dart';
 import '../features/auth/register_page.dart';
 import '../features/exercise/exercise.dart';
 import '../features/exercise/exercise_detail_page.dart';
+import '../features/exercise/exercise_form_page.dart';
 import '../features/exercise/exercise_list_page.dart';
 import '../features/home/home_page.dart';
 
@@ -38,6 +39,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final e = state.extra;
           return e is Exercise ? ExerciseDetailPage(exercise: e) : const ExerciseListPage();
         },
+      ),
+      GoRoute(
+        path: '/exercise-form',
+        builder: (_, state) => ExerciseFormPage(exercise: state.extra is Exercise ? state.extra as Exercise : null),
       ),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
