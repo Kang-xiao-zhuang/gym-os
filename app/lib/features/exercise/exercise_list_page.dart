@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/theme.dart';
 import 'exercise.dart';
 import 'exercise_providers.dart';
 
@@ -23,21 +25,21 @@ class ExerciseListPage extends ConsumerWidget {
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _ErrorView(
-          message: '$e',
-          onRetry: () => ref.invalidate(exerciseListProvider),
-        ),
+        error: (e, _) => _ErrorView(message: '$e', onRetry: () => ref.invalidate(exerciseListProvider)),
         data: (list) {
           if (list.isEmpty) {
-            return const Center(child: Text('动作库还是空的，先去添加动作吧'));
+            return const Center(child: Text('动作库还是空的'));
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(exerciseListProvider),
             child: ListView.separated(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(AppTheme.pad),
               itemCount: list.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (_, i) => _ExerciseCard(exercise: list[i]),
+              separatorBuilder: (_, _) => const SizedBox(height: AppTheme.gap),
+              itemBuilder: (_, i) => _ExerciseCard(
+                exercise: list[i],
+                onTap: () => context.push('/exercise-detail', extra: list[i]),
+              ),
             ),
           );
         },
@@ -47,49 +49,47 @@ class ExerciseListPage extends ConsumerWidget {
 }
 
 class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({required this.exercise});
+  const _ExerciseCard({required this.exercise, required this.onTap});
 
   final Exercise exercise;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            _Thumb(url: exercise.imageUrl),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(exercise.name, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      _Tag(exercise.bodyPart, Colors.indigo),
-                      if (exercise.equipment != null) _Tag(exercise.equipment!, Colors.teal),
-                    ],
-                  ),
-                  if (exercise.description != null) ...[
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.gap),
+          child: Row(
+            children: [
+              _Thumb(url: exercise.imageUrl),
+              const SizedBox(width: AppTheme.gap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(exercise.name, style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 6),
-                    Text(
-                      exercise.description!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        _Tag(exercise.bodyPart, scheme.primary),
+                        if (exercise.equipment != null) _Tag(exercise.equipment!, scheme.tertiary),
+                      ],
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            _Difficulty(level: exercise.difficulty ?? 0),
-          ],
+              const SizedBox(width: 8),
+              _Difficulty(level: exercise.difficulty ?? 0),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, color: scheme.outline),
+            ],
+          ),
         ),
       ),
     );
@@ -103,32 +103,25 @@ class _Thumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     const size = 56.0;
-    if (url == null || url!.isEmpty) {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: Colors.indigo.shade50,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(Icons.fitness_center, color: Colors.indigo),
-      );
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        url!,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Container(
+    Widget placeholder() => Container(
           width: size,
           height: size,
-          color: Colors.grey.shade200,
-          child: const Icon(Icons.broken_image, color: Colors.grey),
-        ),
-      ),
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          child: Icon(Icons.fitness_center, color: scheme.primary.withValues(alpha: 0.6)),
+        );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: (url == null || url!.isEmpty)
+          ? placeholder()
+          : Image.network(
+              url!,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => placeholder(),
+            ),
     );
   }
 }
@@ -147,7 +140,7 @@ class _Tag extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Text(text, style: TextStyle(color: color, fontSize: 12)),
+      child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
     );
   }
 }
@@ -159,23 +152,16 @@ class _Difficulty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text('难度', style: TextStyle(fontSize: 10, color: Colors.grey)),
-        const SizedBox(height: 2),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(
-            5,
-            (i) => Icon(
-              Icons.circle,
-              size: 7,
-              color: i < level ? Colors.orange : Colors.grey.shade300,
-            ),
-          ),
+      children: List.generate(
+        5,
+        (i) => Icon(
+          Icons.circle,
+          size: 7,
+          color: i < level ? Colors.orange : Colors.grey.shade300,
         ),
-      ],
+      ),
     );
   }
 }
