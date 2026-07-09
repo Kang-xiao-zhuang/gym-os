@@ -1,14 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/body_part.dart';
 import 'workout_models.dart';
 import 'workout_providers.dart';
 import 'workout_repository.dart';
 
+/// Per-day completion, persisted locally and scoped to the current date, so
+/// checking off survives day-switch / reload but resets on a new day.
+class CompletionStore {
+  static String _key(String dayId) {
+    final n = DateTime.now();
+    return 'done_${dayId}_${n.year}-${n.month}-${n.day}';
+  }
+
+  static Future<Set<String>> load(String dayId) async {
+    final p = await SharedPreferences.getInstance();
+    return (p.getStringList(_key(dayId)) ?? const <String>[]).toSet();
+  }
+
+  static Future<void> save(String dayId, Set<String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_key(dayId), ids.toList());
+  }
+}
+
 /// The "today" home block: pick the active plan → pick which day → check off
-/// exercises as you train. Completion is local (resets on reload) for now.
+/// exercises as you train.
 class TodaySection extends ConsumerStatefulWidget {
   const TodaySection({super.key});
 
@@ -18,7 +38,6 @@ class TodaySection extends ConsumerStatefulWidget {
 
 class _TodaySectionState extends ConsumerState<TodaySection> {
   String? _selectedDayId;
-  final Set<String> _done = {};
 
   Future<void> _pickActive(BuildContext context, List<Plan> plans) async {
     final chosen = await showModalBottomSheet<Plan>(
@@ -43,10 +62,7 @@ class _TodaySectionState extends ConsumerState<TodaySection> {
     if (chosen == null) return;
     try {
       await WorkoutRepository.activatePlan(chosen.id);
-      setState(() {
-        _selectedDayId = null;
-        _done.clear();
-      });
+      setState(() => _selectedDayId = null);
       ref.invalidate(plansProvider);
     } catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('切换失败：$e')));
@@ -61,9 +77,7 @@ class _TodaySectionState extends ConsumerState<TodaySection> {
       error: (e, _) => _Hero(child: Text('加载失败：$e', style: const TextStyle(color: Colors.white))),
       data: (plans) {
         if (plans.isEmpty) {
-          return _Hero(
-            child: _prompt('还没有训练计划', '创建一个计划，开始你的训练', '去创建', () => context.push('/plans')),
-          );
+          return _Hero(child: _prompt('还没有训练计划', '创建一个计划，开始你的训练', '去创建', () => context.push('/plans')));
         }
         Plan? active;
         for (final p in plans) {
@@ -74,18 +88,14 @@ class _TodaySectionState extends ConsumerState<TodaySection> {
         }
         if (active == null) {
           return _Hero(
-            child: _prompt('选择一个进行中的计划', '把某个计划设为进行中，首页就能直接开练', '选择计划', () => _pickActive(context, plans)),
+            child: _prompt('选择一个进行中的计划', '把某个计划设为进行中，首页就能直接开练', '选择计划',
+                () => _pickActive(context, plans)),
           );
         }
         return _ActivePlanToday(
           plan: active,
           selectedDayId: _selectedDayId,
-          done: _done,
-          onPickDay: (id) => setState(() {
-            _selectedDayId = id;
-            _done.clear();
-          }),
-          onToggle: (id) => setState(() => _done.contains(id) ? _done.remove(id) : _done.add(id)),
+          onPickDay: (id) => setState(() => _selectedDayId = id),
           onChangePlan: () => _pickActive(context, plans),
         );
       },
@@ -110,22 +120,17 @@ class _TodaySectionState extends ConsumerState<TodaySection> {
   }
 }
 
-/// Active-plan view: day chips + checklist. Watches days/day-exercises providers.
 class _ActivePlanToday extends ConsumerWidget {
   const _ActivePlanToday({
     required this.plan,
     required this.selectedDayId,
-    required this.done,
     required this.onPickDay,
-    required this.onToggle,
     required this.onChangePlan,
   });
 
   final Plan plan;
   final String? selectedDayId;
-  final Set<String> done;
   final ValueChanged<String> onPickDay;
-  final ValueChanged<String> onToggle;
   final VoidCallback onChangePlan;
 
   @override
@@ -135,32 +140,16 @@ class _ActivePlanToday extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _Hero(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  const Text('今天 · ', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                  Expanded(
-                    child: Text(plan.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-                  ),
-                  TextButton(
-                    onPressed: onChangePlan,
-                    child: const Text('更换', style: TextStyle(color: Colors.white)),
-                  ),
-                ],
+              const Text('今天 · ', style: TextStyle(color: Colors.white70, fontSize: 14)),
+              Expanded(
+                child: Text(plan.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
               ),
-              daysAsync.maybeWhen(
-                data: (days) => days.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text('这个计划还没有训练日', style: TextStyle(color: Colors.white70, fontSize: 13)))
-                    : const SizedBox.shrink(),
-                orElse: () => const SizedBox.shrink(),
-              ),
+              TextButton(onPressed: onChangePlan, child: const Text('更换', style: TextStyle(color: Colors.white))),
             ],
           ),
         ),
@@ -201,7 +190,7 @@ class _ActivePlanToday extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                _Checklist(dayId: dayId, done: done, onToggle: onToggle),
+                _Checklist(key: ValueKey(dayId), dayId: dayId),
               ],
             );
           },
@@ -211,16 +200,35 @@ class _ActivePlanToday extends ConsumerWidget {
   }
 }
 
-class _Checklist extends ConsumerWidget {
-  const _Checklist({required this.dayId, required this.done, required this.onToggle});
+/// Checklist for one day. Owns its completion set, persisted per day+date.
+class _Checklist extends ConsumerStatefulWidget {
+  const _Checklist({super.key, required this.dayId});
 
   final String dayId;
-  final Set<String> done;
-  final ValueChanged<String> onToggle;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(dayExercisesProvider(dayId));
+  ConsumerState<_Checklist> createState() => _ChecklistState();
+}
+
+class _ChecklistState extends ConsumerState<_Checklist> {
+  Set<String> _done = {};
+
+  @override
+  void initState() {
+    super.initState();
+    CompletionStore.load(widget.dayId).then((s) {
+      if (mounted) setState(() => _done = s);
+    });
+  }
+
+  void _toggle(String id) {
+    setState(() => _done.contains(id) ? _done.remove(id) : _done.add(id));
+    CompletionStore.save(widget.dayId, _done);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(dayExercisesProvider(widget.dayId));
     return async.when(
       loading: () => const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
       error: (e, _) => Text('加载失败：$e'),
@@ -231,7 +239,7 @@ class _Checklist extends ConsumerWidget {
             child: Text('这天还没有动作，去计划里加', style: TextStyle(color: Colors.grey.shade600)),
           );
         }
-        final doneCount = items.where((e) => done.contains(e.id)).length;
+        final doneCount = items.where((e) => _done.contains(e.id)).length;
         final allDone = doneCount == items.length;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,7 +253,7 @@ class _Checklist extends ConsumerWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: LinearProgressIndicator(
-                      value: items.isEmpty ? 0 : doneCount / items.length,
+                      value: doneCount / items.length,
                       minHeight: 8,
                       backgroundColor: Colors.grey.shade200,
                     ),
@@ -255,12 +263,12 @@ class _Checklist extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             ...items.map((e) {
-              final isDone = done.contains(e.id);
+              final isDone = _done.contains(e.id);
               final s = bodyPartStyle(e.bodyPart ?? '');
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  onTap: () => onToggle(e.id),
+                  onTap: () => _toggle(e.id),
                   leading: Text(s.emoji, style: const TextStyle(fontSize: 22)),
                   title: Text(
                     e.exerciseName,
@@ -288,7 +296,6 @@ class _Checklist extends ConsumerWidget {
   }
 }
 
-/// Gradient hero container used for the today header.
 class _Hero extends StatelessWidget {
   const _Hero({required this.child});
 
