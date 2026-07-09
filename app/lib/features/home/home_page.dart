@@ -1,42 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/api_client.dart';
-
-class HomePage extends ConsumerStatefulWidget {
+class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
   @override
-  ConsumerState<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends ConsumerState<HomePage> {
-  bool _loading = false;
-  String? _result;
-  String? _error;
-
-  Future<void> _loadExercises() async {
-    setState(() {
-      _loading = true;
-      _result = null;
-      _error = null;
-    });
-    try {
-      final data = await ApiClient.get('/api/exercises') as List<dynamic>;
-      final names = data.map((e) => e['name']).take(10).join('、');
-      setState(() => _result = '后端返回 ${data.length} 个动作${names.isEmpty ? '（库为空）' : '：$names'}');
-    } on ApiException catch (e) {
-      setState(() => _error = '接口错误 [${e.code}] ${e.message}');
-    } catch (e) {
-      setState(() => _error = '请求失败：$e（后端是否已在 8866 启动？）');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final user = Supabase.instance.client.auth.currentUser;
     return Scaffold(
       appBar: AppBar(
@@ -49,41 +20,66 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 48),
-                const SizedBox(height: 12),
-                Text('已登录', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 4),
-                Text(user?.email ?? '(无邮箱)', style: Theme.of(context).textTheme.bodyMedium),
-                const SizedBox(height: 32),
-                FilledButton.icon(
-                  onPressed: _loading ? null : _loadExercises,
-                  icon: const Icon(Icons.cloud_download),
-                  label: const Text('带 Token 调后端 /api/exercises'),
-                ),
-                const SizedBox(height: 20),
-                if (_loading) const CircularProgressIndicator(),
-                if (_result != null)
-                  Card(
-                    color: Colors.green.shade50,
-                    child: Padding(padding: const EdgeInsets.all(16), child: Text(_result!)),
-                  ),
-                if (_error != null)
-                  Card(
-                    color: Colors.red.shade50,
-                    child: Padding(padding: const EdgeInsets.all(16), child: Text(_error!)),
-                  ),
-              ],
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.person)),
+              title: Text(user?.email ?? '(无邮箱)'),
+              subtitle: const Text('已登录'),
             ),
           ),
-        ),
+          const SizedBox(height: 12),
+          _FeatureCard(
+            icon: Icons.fitness_center,
+            title: '动作库',
+            subtitle: '浏览训练动作',
+            onTap: () => context.push('/exercises'),
+          ),
+          _FeatureCard(
+            icon: Icons.event_note,
+            title: '训练计划',
+            subtitle: '即将上线',
+            enabled: false,
+          ),
+          _FeatureCard(
+            icon: Icons.monitor_weight,
+            title: '身体数据',
+            subtitle: '即将上线',
+            enabled: false,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureCard extends StatelessWidget {
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon, color: enabled ? Colors.indigo : Colors.grey),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: enabled ? const Icon(Icons.chevron_right) : null,
+        enabled: enabled,
+        onTap: enabled ? onTap : null,
       ),
     );
   }
