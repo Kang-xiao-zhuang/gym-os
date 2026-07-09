@@ -115,6 +115,14 @@ class ProfilePage extends ConsumerWidget {
                 ),
                 const Divider(height: 1),
                 ListTile(
+                  leading: const Text('📈', style: TextStyle(fontSize: 20)),
+                  title: const Text('训练统计'),
+                  subtitle: const Text('周统计与打卡日历'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/stats'),
+                ),
+                const Divider(height: 1),
+                ListTile(
                   leading: const Text('💪', style: TextStyle(fontSize: 20)),
                   title: const Text('动作库'),
                   subtitle: const Text('管理训练动作'),
