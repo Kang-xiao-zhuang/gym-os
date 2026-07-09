@@ -5,6 +5,11 @@ spring:
   application:
     name: gym-os-api
 
+  # Supabase's session pooler caps total clients at 15; keep the pool small.
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+
   # Load DB credentials from application-local.yml (gitignored) so secrets never enter git.
   profiles:
     active: local
