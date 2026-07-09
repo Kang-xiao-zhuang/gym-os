@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/body_part.dart';
 import '../history/session_providers.dart';
@@ -12,27 +11,7 @@ import 'workout_models.dart';
 import 'workout_providers.dart';
 import 'workout_repository.dart';
 
-/// Per-day completion, persisted locally and scoped to the current date, so
-/// checking off survives day-switch / reload but resets on a new day.
-class CompletionStore {
-  static String _key(String dayId) {
-    final n = DateTime.now();
-    return 'done_${dayId}_${n.year}-${n.month}-${n.day}';
-  }
-
-  static Future<Set<String>> load(String dayId) async {
-    final p = await SharedPreferences.getInstance();
-    return (p.getStringList(_key(dayId)) ?? const <String>[]).toSet();
-  }
-
-  static Future<void> save(String dayId, Set<String> ids) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setStringList(_key(dayId), ids.toList());
-  }
-}
-
-/// The "today" home block: pick the active plan → pick which day → check off
-/// exercises as you train.
+/// The "today" home block: pick the active plan → pick which day → log sets.
 class TodaySection extends ConsumerStatefulWidget {
   const TodaySection({super.key});
 
@@ -194,7 +173,7 @@ class _ActivePlanToday extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                _Checklist(key: ValueKey(dayId), dayId: dayId),
+                _SetLogger(key: ValueKey(dayId), dayId: dayId),
               ],
             );
           },
@@ -204,18 +183,28 @@ class _ActivePlanToday extends ConsumerWidget {
   }
 }
 
-/// Checklist for one day. Owns its completion set, persisted per day+date.
-class _Checklist extends ConsumerStatefulWidget {
-  const _Checklist({super.key, required this.dayId});
+/// One editable set: weight × reps + done flag.
+class _SetRow {
+  _SetRow(this.no, this.weight, this.reps);
+  final int no;
+  final TextEditingController weight;
+  final TextEditingController reps;
+  bool done = false;
+}
+
+/// Per-set workout logger for one day. Sets are in-memory for the session and
+/// saved to the backend on "完成训练".
+class _SetLogger extends ConsumerStatefulWidget {
+  const _SetLogger({super.key, required this.dayId});
 
   final String dayId;
 
   @override
-  ConsumerState<_Checklist> createState() => _ChecklistState();
+  ConsumerState<_SetLogger> createState() => _SetLoggerState();
 }
 
-class _ChecklistState extends ConsumerState<_Checklist> {
-  Set<String> _done = {};
+class _SetLoggerState extends ConsumerState<_SetLogger> {
+  final Map<String, List<_SetRow>> _rows = {};
   final DateTime _start = DateTime.now();
   Duration _elapsed = Duration.zero;
   Timer? _tick;
@@ -223,9 +212,6 @@ class _ChecklistState extends ConsumerState<_Checklist> {
   @override
   void initState() {
     super.initState();
-    CompletionStore.load(widget.dayId).then((s) {
-      if (mounted) setState(() => _done = s);
-    });
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _elapsed = DateTime.now().difference(_start));
     });
@@ -234,7 +220,45 @@ class _ChecklistState extends ConsumerState<_Checklist> {
   @override
   void dispose() {
     _tick?.cancel();
+    for (final rows in _rows.values) {
+      for (final r in rows) {
+        r.weight.dispose();
+        r.reps.dispose();
+      }
+    }
     super.dispose();
+  }
+
+  static String _fmtW(double? w) => w == null ? '' : (w % 1 == 0 ? w.toStringAsFixed(0) : w.toStringAsFixed(1));
+
+  List<_SetRow> _rowsFor(DayExercise e) {
+    return _rows.putIfAbsent(e.id, () {
+      final n = (e.targetSets ?? 1).clamp(1, 12);
+      return List.generate(
+        n,
+        (i) => _SetRow(i + 1, TextEditingController(text: _fmtW(e.targetWeight)),
+            TextEditingController(text: e.targetReps?.toString() ?? '')),
+      );
+    });
+  }
+
+  void _addSet(DayExercise e) {
+    final rows = _rowsFor(e);
+    final last = rows.isNotEmpty ? rows.last : null;
+    setState(() => rows.add(_SetRow(
+          rows.length + 1,
+          TextEditingController(text: last?.weight.text ?? _fmtW(e.targetWeight)),
+          TextEditingController(text: last?.reps.text ?? (e.targetReps?.toString() ?? '')),
+        )));
+  }
+
+  void _removeSet(DayExercise e) {
+    final rows = _rowsFor(e);
+    if (rows.length <= 1) return;
+    final r = rows.removeLast();
+    r.weight.dispose();
+    r.reps.dispose();
+    setState(() {});
   }
 
   String get _elapsedText {
@@ -242,29 +266,86 @@ class _ChecklistState extends ConsumerState<_Checklist> {
     return '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
   }
 
-  void _toggle(String id) {
-    setState(() => _done.contains(id) ? _done.remove(id) : _done.add(id));
-    CompletionStore.save(widget.dayId, _done);
+  double _volume(List<DayExercise> items) {
+    var v = 0.0;
+    for (final e in items) {
+      for (final r in _rows[e.id] ?? const <_SetRow>[]) {
+        if (!r.done) continue;
+        final w = double.tryParse(r.weight.text);
+        final reps = int.tryParse(r.reps.text);
+        if (w != null && reps != null) v += w * reps;
+      }
+    }
+    return v;
+  }
+
+  ({int total, int done}) _counts(List<DayExercise> items) {
+    var total = 0, done = 0;
+    for (final e in items) {
+      for (final r in _rows[e.id] ?? const <_SetRow>[]) {
+        total++;
+        if (r.done) done++;
+      }
+    }
+    return (total: total, done: done);
   }
 
   Future<void> _finish(List<DayExercise> items) async {
-    final completed = items.where((e) => _done.contains(e.id)).map((e) => e.exerciseId).toList();
-    if (completed.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('先勾选完成的动作 💪')));
+    final logs = <Map<String, dynamic>>[];
+    for (final e in items) {
+      for (final r in _rows[e.id] ?? const <_SetRow>[]) {
+        if (!r.done) continue;
+        logs.add({
+          'exerciseId': e.exerciseId,
+          'setNo': r.no,
+          'weight': double.tryParse(r.weight.text),
+          'reps': int.tryParse(r.reps.text),
+        });
+      }
+    }
+    if (logs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('先完成至少一组 💪')));
       return;
     }
+    final minutes = _elapsed.inMinutes;
+    final vol = _volume(items);
     try {
       await WorkoutRepository.finishSession(
         dayId: widget.dayId,
         startedAt: _start,
-        durationMinutes: _elapsed.inMinutes,
-        exerciseIds: completed,
+        durationMinutes: minutes,
+        logs: logs,
       );
-      await CompletionStore.save(widget.dayId, {});
       ref.invalidate(sessionsProvider);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('训练完成 🎉'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('⏱ 用时 $minutes 分钟'),
+              const SizedBox(height: 6),
+              Text('✅ 完成 ${logs.length} 组'),
+              const SizedBox(height: 6),
+              Text('🏋️ 总容量 ${vol.toStringAsFixed(0)} kg'),
+            ],
+          ),
+          actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('好的'))],
+        ),
+      );
       if (mounted) {
-        setState(() => _done.clear());
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('训练已记录 🎉 干得漂亮！')));
+        setState(() {
+          for (final rows in _rows.values) {
+            for (final r in rows) {
+              r.weight.dispose();
+              r.reps.dispose();
+            }
+          }
+          _rows.clear();
+        });
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('记录失败：$e')));
@@ -284,8 +365,12 @@ class _ChecklistState extends ConsumerState<_Checklist> {
             child: Text('这天还没有动作，去计划里加', style: TextStyle(color: Colors.grey.shade600)),
           );
         }
-        final doneCount = items.where((e) => _done.contains(e.id)).length;
-        final allDone = doneCount == items.length;
+        for (final e in items) {
+          _rowsFor(e);
+        }
+        final c = _counts(items);
+        final vol = _volume(items);
+        final allDone = c.total > 0 && c.done == c.total;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -295,6 +380,9 @@ class _ChecklistState extends ConsumerState<_Checklist> {
                 const SizedBox(width: 4),
                 Text('训练中 $_elapsedText',
                     style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Text('🏋️ ${vol.toStringAsFixed(0)} kg',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12.5, fontWeight: FontWeight.w700)),
               ],
             ),
             const SizedBox(height: 8),
@@ -305,13 +393,9 @@ class _ChecklistState extends ConsumerState<_Checklist> {
                   transitionBuilder: (child, anim) =>
                       ScaleTransition(scale: anim, child: FadeTransition(opacity: anim, child: child)),
                   child: Text(
-                    allDone ? '今天练完啦 🎉' : '已完成 $doneCount / ${items.length}',
+                    allDone ? '全部完成 🎉' : '已完成 ${c.done} / ${c.total} 组',
                     key: ValueKey(allDone),
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: allDone ? Colors.green : null,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: allDone ? Colors.green : null),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -319,7 +403,7 @@ class _ChecklistState extends ConsumerState<_Checklist> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0, end: doneCount / items.length),
+                      tween: Tween(begin: 0, end: c.total == 0 ? 0 : c.done / c.total),
                       duration: const Duration(milliseconds: 400),
                       curve: Curves.easeOut,
                       builder: (context, v, _) => LinearProgressIndicator(
@@ -333,53 +417,19 @@ class _ChecklistState extends ConsumerState<_Checklist> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            ...items.map((e) {
-              final isDone = _done.contains(e.id);
-              final s = bodyPartStyle(e.bodyPart ?? '');
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  onTap: () => _toggle(e.id),
-                  leading: Text(s.emoji, style: const TextStyle(fontSize: 22)),
-                  title: Text(
-                    e.exerciseName,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      decoration: isDone ? TextDecoration.lineThrough : null,
-                      color: isDone ? Colors.grey : null,
-                    ),
-                  ),
-                  subtitle: Text([
-                    if (e.volume.isNotEmpty) e.volume,
-                    if (e.restSeconds != null) '歇 ${e.restSeconds}s',
-                  ].join('  ·  ')),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: '组间休息',
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                        icon: Icon(Icons.timer_outlined, size: 20, color: Colors.grey.shade500),
-                        onPressed: () => showRestTimer(context, e.restSeconds ?? 90),
-                      ),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                        child: Icon(
-                          isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                          key: ValueKey(isDone),
-                          color: isDone ? Colors.green : Colors.grey.shade400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
+            ...items.map((e) => _ExerciseSets(
+                  exercise: e,
+                  rows: _rowsFor(e),
+                  onToggle: (r) {
+                    setState(() => r.done = !r.done);
+                    if (r.done) showRestTimer(context, e.restSeconds ?? 90);
+                  },
+                  onAdd: () => _addSet(e),
+                  onRemove: () => _removeSet(e),
+                  numField: _numField,
+                )),
+            const SizedBox(height: 4),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -391,6 +441,117 @@ class _ChecklistState extends ConsumerState<_Checklist> {
           ],
         );
       },
+    );
+  }
+
+  Widget _numField(TextEditingController c, String hint) => SizedBox(
+        width: 56,
+        child: TextField(
+          controller: c,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textAlign: TextAlign.center,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            hintText: hint,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          ),
+        ),
+      );
+}
+
+class _ExerciseSets extends StatelessWidget {
+  const _ExerciseSets({
+    required this.exercise,
+    required this.rows,
+    required this.onToggle,
+    required this.onAdd,
+    required this.onRemove,
+    required this.numField,
+  });
+
+  final DayExercise exercise;
+  final List<_SetRow> rows;
+  final ValueChanged<_SetRow> onToggle;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
+  final Widget Function(TextEditingController, String) numField;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = bodyPartStyle(exercise.bodyPart ?? '');
+    final target = [
+      if (exercise.targetSets != null && exercise.targetReps != null)
+        '目标 ${exercise.targetSets}×${exercise.targetReps}',
+    ].join();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(s.emoji, style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(exercise.exerciseName, style: const TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                if (target.isNotEmpty)
+                  Text(target, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                IconButton(
+                  tooltip: '组间休息',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                  icon: Icon(Icons.timer_outlined, size: 19, color: Colors.grey.shade500),
+                  onPressed: () => showRestTimer(context, exercise.restSeconds ?? 90),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            ...rows.map((r) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 44,
+                        child: Text('第${r.no}组', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      ),
+                      numField(r.weight, 'kg'),
+                      const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('×')),
+                      numField(r.reps, '次'),
+                      const Spacer(),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(
+                          r.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                          color: r.done ? Colors.green : Colors.grey.shade400,
+                        ),
+                        onPressed: () => onToggle(r),
+                      ),
+                    ],
+                  ),
+                )),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('加一组'),
+                ),
+                if (rows.length > 1)
+                  TextButton.icon(
+                    onPressed: onRemove,
+                    icon: const Icon(Icons.remove, size: 16),
+                    label: const Text('减一组'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

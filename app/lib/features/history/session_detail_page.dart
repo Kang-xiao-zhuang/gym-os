@@ -39,27 +39,56 @@ class SessionDetailPage extends ConsumerWidget {
                 children: [
                   Text(s.dayTitle?.isNotEmpty == true ? s.dayTitle! : '训练',
                       style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
-                  Text([
-                    if (s.finishedAt != null) fmtDate(s.finishedAt!),
-                    '${s.exercises.length} 个动作',
-                    if (s.durationMinutes != null) '${s.durationMinutes} 分钟',
-                  ].join('  ·  '), style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  if (s.finishedAt != null) ...[
+                    const SizedBox(height: 4),
+                    Text(fmtDate(s.finishedAt!), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      _stat('${s.totalSets}', '组'),
+                      _stat(s.totalVolume.toStringAsFixed(0), 'kg 容量'),
+                      _stat('${s.durationMinutes ?? 0}', '分钟'),
+                    ],
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
-            Text('  完成的动作', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
             ...s.exercises.map((e) {
               final st = bodyPartStyle(e.bodyPart ?? '');
               return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: Text(st.emoji, style: const TextStyle(fontSize: 22)),
-                  title: Text(e.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: e.bodyPart != null ? Text(e.bodyPart!) : null,
-                  trailing: const Icon(Icons.check_circle_rounded, color: Colors.green),
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(st.emoji, style: const TextStyle(fontSize: 20)),
+                          const SizedBox(width: 8),
+                          Text(e.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          const Spacer(),
+                          Text('${e.sets.length} 组', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ...e.sets.map((set) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 48,
+                                  child: Text('第${set.setNo ?? '-'}组',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                                ),
+                                Text(set.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          )),
+                    ],
+                  ),
                 ),
               );
             }),
@@ -68,4 +97,14 @@ class SessionDetailPage extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _stat(String value, String label) => Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          ],
+        ),
+      );
 }

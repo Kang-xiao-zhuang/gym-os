@@ -16,14 +16,13 @@ import com.zk.gymos.repository.WorkoutSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** Training history: sessions + per-exercise logs, scoped to the user. */
+/** Training history: sessions + per-set logs, scoped to the user. */
 @Service
 public class SessionService {
 
@@ -50,21 +49,30 @@ public class SessionService {
         s.setDurationMinutes(req.durationMinutes());
         sessionRepo.save(s);
 
-        List<UUID> ids = req.exerciseIds() == null ? List.of() : req.exerciseIds();
-        for (UUID exId : ids) {
+        List<SessionRequest.LogEntry> entries = req.logs() == null ? List.of() : req.logs();
+        List<WorkoutLog> saved = new ArrayList<>();
+        for (SessionRequest.LogEntry e : entries) {
             WorkoutLog log = new WorkoutLog();
             log.setSessionId(s.getId());
-            log.setExerciseId(exId);
+            log.setExerciseId(e.exerciseId());
+            log.setSetNo(e.setNo());
+            log.setWeight(e.weight());
+            log.setReps(e.reps());
             log.setIsCompleted(true);
-            logRepo.save(log);
+            saved.add(logRepo.save(log));
         }
-        return SessionResponse.of(s, dayTitle(req.workoutDayId()), ids.size());
+        return SessionResponse.of(s, dayTitle(req.workoutDayId()),
+                saved.size(), volume(saved), distinctExercises(saved));
     }
 
     @Transactional(readOnly = true)
     public List<SessionResponse> list(UUID userId) {
         return sessionRepo.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(s -> SessionResponse.of(s, dayTitle(s.getWorkoutDayId()), logRepo.countBySessionId(s.getId())))
+                .map(s -> {
+                    List<WorkoutLog> logs = logRepo.findBySessionId(s.getId());
+                    return SessionResponse.of(s, dayTitle(s.getWorkoutDayId()),
+                            logs.size(), volume(logs), distinctExercises(logs));
+                })
                 .toList();
     }
 
@@ -73,19 +81,30 @@ public class SessionService {
         WorkoutSession s = require(userId, sessionId);
         List<WorkoutLog> logs = logRepo.findBySessionId(sessionId);
         Map<UUID, Exercise> byId = exerciseRepo
-                .findAllById(logs.stream().map(WorkoutLog::getExerciseId).toList()).stream()
+                .findAllById(logs.stream().map(WorkoutLog::getExerciseId).distinct().toList()).stream()
                 .collect(Collectors.toMap(Exercise::getId, Function.identity()));
-        List<SessionDetailResponse.LoggedExercise> exercises = logs.stream()
-                .map(l -> {
-                    Exercise e = byId.get(l.getExerciseId());
-                    return new SessionDetailResponse.LoggedExercise(
-                            l.getExerciseId(),
-                            e == null ? "(已删除动作)" : e.getName(),
-                            e == null ? null : e.getBodyPart());
-                })
-                .toList();
+
+        // Group logs by exercise, preserving first-seen order, sets sorted by setNo.
+        LinkedHashMap<UUID, List<WorkoutLog>> grouped = new LinkedHashMap<>();
+        for (WorkoutLog l : logs) {
+            grouped.computeIfAbsent(l.getExerciseId(), k -> new ArrayList<>()).add(l);
+        }
+        List<SessionDetailResponse.ExerciseLog> exercises = grouped.entrySet().stream().map(en -> {
+            Exercise e = byId.get(en.getKey());
+            List<SessionDetailResponse.SetLog> sets = en.getValue().stream()
+                    .sorted(Comparator.comparing(l -> l.getSetNo() == null ? 0 : l.getSetNo()))
+                    .map(l -> new SessionDetailResponse.SetLog(l.getSetNo(), l.getWeight(), l.getReps()))
+                    .toList();
+            return new SessionDetailResponse.ExerciseLog(
+                    en.getKey(),
+                    e == null ? "(已删除动作)" : e.getName(),
+                    e == null ? null : e.getBodyPart(),
+                    sets);
+        }).toList();
+
         return new SessionDetailResponse(s.getId(), dayTitle(s.getWorkoutDayId()),
-                s.getStartedAt(), s.getFinishedAt(), s.getDurationMinutes(), exercises);
+                s.getStartedAt(), s.getFinishedAt(), s.getDurationMinutes(),
+                logs.size(), volume(logs), exercises);
     }
 
     @Transactional
@@ -93,6 +112,20 @@ public class SessionService {
         require(userId, sessionId);
         logRepo.deleteBySessionId(sessionId);
         sessionRepo.deleteById(sessionId);
+    }
+
+    private BigDecimal volume(List<WorkoutLog> logs) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (WorkoutLog l : logs) {
+            if (l.getWeight() != null && l.getReps() != null) {
+                sum = sum.add(l.getWeight().multiply(BigDecimal.valueOf(l.getReps())));
+            }
+        }
+        return sum;
+    }
+
+    private long distinctExercises(List<WorkoutLog> logs) {
+        return logs.stream().map(WorkoutLog::getExerciseId).distinct().count();
     }
 
     private WorkoutSession require(UUID userId, UUID sessionId) {

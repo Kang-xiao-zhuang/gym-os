@@ -80,7 +80,8 @@ class _SessionCard extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text([
           fmtDate(s.when),
-          '${s.exerciseCount} 个动作',
+          '${s.totalSets} 组',
+          if (s.totalVolume > 0) '${s.totalVolume.toStringAsFixed(0)} kg',
           if (s.durationMinutes != null) '${s.durationMinutes} 分钟',
         ].join('  ·  ')),
         trailing: PopupMenuButton<String>(

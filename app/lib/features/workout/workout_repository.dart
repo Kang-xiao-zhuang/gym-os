@@ -32,18 +32,19 @@ class WorkoutRepository {
 
   static Future<void> deleteDayExercise(String id) => ApiClient.delete('/api/day-exercises/$id');
 
-  /// Finish today's workout → persist a session + logs.
+  /// Finish today's workout → persist a session with per-set logs.
+  /// Each log: {exerciseId, setNo, weight, reps}.
   static Future<void> finishSession({
     required String dayId,
     required DateTime startedAt,
     required int durationMinutes,
-    required List<String> exerciseIds,
+    required List<Map<String, dynamic>> logs,
   }) =>
       ApiClient.post('/api/sessions', {
         'workoutDayId': dayId,
         'startedAt': startedAt.toUtc().toIso8601String(),
         'durationMinutes': durationMinutes,
-        'exerciseIds': exerciseIds,
+        'logs': logs,
       });
 
   static Future<void> deleteSession(String id) => ApiClient.delete('/api/sessions/$id');
