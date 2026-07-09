@@ -4,16 +4,17 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
+import 'profile_providers.dart';
 
-/// The "我的" tab: account info, secondary entries (动作库), logout.
+/// The "我的" tab: account info, edit profile, 动作库, logout.
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = Supabase.instance.client.auth.currentUser;
-    final name = (user?.userMetadata?['nickname'] as String?)?.trim();
-    final display = (name != null && name.isNotEmpty) ? name : '训练者';
+    final user = ref.watch(authUserProvider).value;
+    final name = displayName(user);
+    final avatar = avatarUrl(user);
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
@@ -33,22 +34,29 @@ class ProfilePage extends ConsumerWidget {
             child: Row(
               children: [
                 CircleAvatar(
-                  radius: 28,
+                  radius: 30,
                   backgroundColor: Colors.white24,
-                  child: Text(display.characters.first, style: const TextStyle(color: Colors.white, fontSize: 22)),
+                  backgroundImage: avatar != null ? NetworkImage(avatar) : null,
+                  child: avatar == null
+                      ? Text(name.characters.first, style: const TextStyle(color: Colors.white, fontSize: 24))
+                      : null,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(display,
+                      Text(name,
                           style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
-                      Text(user?.email ?? '',
-                          style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      Text(user?.email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 13)),
                     ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_rounded, color: Colors.white),
+                  tooltip: '编辑资料',
+                  onPressed: () => context.push('/profile-edit'),
                 ),
               ],
             ),
@@ -58,7 +66,14 @@ class ProfilePage extends ConsumerWidget {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Text('💪', style: TextStyle(fontSize: 22)),
+                  leading: const Icon(Icons.person_outline_rounded),
+                  title: const Text('编辑资料'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/profile-edit'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Text('💪', style: TextStyle(fontSize: 20)),
                   title: const Text('动作库'),
                   subtitle: const Text('管理训练动作'),
                   trailing: const Icon(Icons.chevron_right),

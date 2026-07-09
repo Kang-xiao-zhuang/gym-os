@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
+import '../profile/profile_providers.dart';
 import '../workout/today_section.dart';
 
 /// The "今天" tab: greeting + today's workout.
@@ -11,10 +11,7 @@ class TodayHomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = Supabase.instance.client.auth.currentUser;
-    final name = (user?.userMetadata?['nickname'] as String?)?.trim();
-    final display =
-        (name != null && name.isNotEmpty) ? name : (user?.email?.split('@').first ?? '训练者');
+    final display = displayName(ref.watch(authUserProvider).value);
 
     final h = DateTime.now().hour;
     final greet = h < 6
