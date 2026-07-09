@@ -26,6 +26,7 @@ class ExerciseListPage extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => context.push('/exercise-form'),
         icon: const Icon(Icons.add_rounded),
         label: const Text('新增'),

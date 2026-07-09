@@ -42,6 +42,38 @@ class PlansPage extends ConsumerWidget {
     }
   }
 
+  Future<void> _rename(BuildContext context, WidgetRef ref, Plan p) async {
+    final name = TextEditingController(text: p.name);
+    final desc = TextEditingController(text: p.description ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('重命名计划'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: '计划名称')),
+            const SizedBox(height: 12),
+            TextField(controller: desc, decoration: const InputDecoration(labelText: '简介（可选）')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('保存')),
+        ],
+      ),
+    );
+    if (ok == true && name.text.trim().isNotEmpty) {
+      try {
+        await WorkoutRepository.updatePlan(p.id,
+            name: name.text.trim(), description: desc.text.trim().isEmpty ? null : desc.text.trim());
+        ref.invalidate(plansProvider);
+      } catch (e) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('重命名失败：$e')));
+      }
+    }
+  }
+
   Future<void> _delete(BuildContext context, WidgetRef ref, Plan p) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -69,6 +101,7 @@ class PlansPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('训练计划 📅')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _createDialog(context, ref),
         icon: const Icon(Icons.add_rounded),
         label: const Text('新建计划'),
@@ -120,8 +153,11 @@ class PlansPage extends ConsumerWidget {
                             ),
                           ),
                           PopupMenuButton<String>(
-                            onSelected: (_) => _delete(context, ref, p),
-                            itemBuilder: (_) => [const PopupMenuItem(value: 'del', child: Text('删除'))],
+                            onSelected: (v) => v == 'rename' ? _rename(context, ref, p) : _delete(context, ref, p),
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'rename', child: Text('重命名')),
+                              PopupMenuItem(value: 'del', child: Text('删除')),
+                            ],
                           ),
                         ],
                       ),

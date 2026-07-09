@@ -111,6 +111,15 @@ public class WorkoutService {
     }
 
     @Transactional
+    public DayResponse updateDay(UUID userId, UUID dayId, DayRequest req) {
+        WorkoutDay d = requireDay(userId, dayId);
+        if (req.title() != null) d.setTitle(req.title());
+        if (req.weekNo() != null) d.setWeekNo(req.weekNo());
+        if (req.dayNo() != null) d.setDayNo(req.dayNo());
+        return DayResponse.of(dayRepo.save(d));
+    }
+
+    @Transactional
     public void deleteDay(UUID userId, UUID dayId) {
         WorkoutDay d = requireDay(userId, dayId);
         dayExerciseRepo.deleteByWorkoutDayId(d.getId());

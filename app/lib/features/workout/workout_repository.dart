@@ -9,6 +9,12 @@ class WorkoutRepository {
 
   static Future<void> activatePlan(String planId) => ApiClient.post('/api/plans/$planId/activate', {});
 
+  static Future<void> updatePlan(String id, {required String name, String? description}) =>
+      ApiClient.put('/api/plans/$id', {'name': name, 'description': description});
+
+  static Future<void> updateDay(String dayId, String title) =>
+      ApiClient.put('/api/days/$dayId', {'title': title});
+
   static Future<void> addDay(String planId, String title) =>
       ApiClient.post('/api/plans/$planId/days', {'title': title});
 

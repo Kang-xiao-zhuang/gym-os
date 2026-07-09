@@ -69,6 +69,12 @@ public class WorkoutController {
         return Results.success(workoutService.addDay(uid(jwt), planId, req));
     }
 
+    @PutMapping("/days/{dayId}")
+    public Result<DayResponse> updateDay(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID dayId,
+                                         @Valid @RequestBody DayRequest req) {
+        return Results.success(workoutService.updateDay(uid(jwt), dayId, req));
+    }
+
     @DeleteMapping("/days/{dayId}")
     public Result<Void> deleteDay(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID dayId) {
         workoutService.deleteDay(uid(jwt), dayId);

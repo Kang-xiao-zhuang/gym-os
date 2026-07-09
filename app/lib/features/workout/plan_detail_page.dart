@@ -49,6 +49,7 @@ class PlanDetailPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: Text(plan.name)),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: () => _addDay(context, ref),
         icon: const Icon(Icons.add_rounded),
         label: const Text('训练日'),
@@ -172,6 +173,29 @@ class _DayBody extends ConsumerWidget {
     }
   }
 
+  Future<void> _renameDay(BuildContext context, WidgetRef ref) async {
+    final c = TextEditingController(text: day.title ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('重命名训练日'),
+        content: TextField(controller: c, autofocus: true, decoration: const InputDecoration(hintText: '例如：第1天 · 胸')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('保存')),
+        ],
+      ),
+    );
+    if (ok == true && c.text.trim().isNotEmpty) {
+      try {
+        await WorkoutRepository.updateDay(day.id, c.text.trim());
+        ref.invalidate(daysProvider(planId));
+      } catch (e) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('重命名失败：$e')));
+      }
+    }
+  }
+
   Future<void> _deleteDay(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -233,10 +257,10 @@ class _DayBody extends ConsumerWidget {
                   label: const Text('加动作'),
                 ),
                 const Spacer(),
-                TextButton.icon(
+                TextButton(onPressed: () => _renameDay(context, ref), child: const Text('重命名')),
+                TextButton(
                   onPressed: () => _deleteDay(context, ref),
-                  icon: Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red.shade300),
-                  label: Text('删除本日', style: TextStyle(color: Colors.red.shade300)),
+                  child: Text('删除', style: TextStyle(color: Colors.red.shade300)),
                 ),
               ],
             ),

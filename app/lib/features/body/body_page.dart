@@ -122,6 +122,7 @@ class _BodyPageState extends ConsumerState<BodyPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('身体数据 📊')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null,
         onPressed: _record,
         icon: const Icon(Icons.add_rounded),
         label: const Text('记录'),
