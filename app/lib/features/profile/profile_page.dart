@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
+import '../../core/theme_mode_provider.dart';
 import 'profile_providers.dart';
 
 /// The "我的" tab: account info, edit profile, 动作库, logout.
@@ -15,6 +16,7 @@ class ProfilePage extends ConsumerWidget {
     final user = ref.watch(authUserProvider).value;
     final name = displayName(user);
     final avatar = avatarUrl(user);
+    final mode = ref.watch(themeModeProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
@@ -62,6 +64,38 @@ class ProfilePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.dark_mode_outlined, size: 20),
+                      const SizedBox(width: 10),
+                      Text('外观', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<ThemeMode>(
+                      segments: const [
+                        ButtonSegment(value: ThemeMode.system, label: Text('系统')),
+                        ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
+                        ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
+                      ],
+                      selected: {mode},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) => ref.read(themeModeProvider.notifier).set(s.first),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           Card(
             child: Column(
               children: [

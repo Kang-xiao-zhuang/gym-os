@@ -23,6 +23,17 @@ class Measurement {
   final double? armLeft;
   final double? thighLeft;
 
+  double? valueOf(String key) => switch (key) {
+        'weight' => weight,
+        'bodyFat' => bodyFat,
+        'chest' => chest,
+        'waist' => waist,
+        'hip' => hip,
+        'armLeft' => armLeft,
+        'thighLeft' => thighLeft,
+        _ => null,
+      };
+
   static double? _d(dynamic v) => (v as num?)?.toDouble();
 
   factory Measurement.fromJson(Map<String, dynamic> j) => Measurement(
