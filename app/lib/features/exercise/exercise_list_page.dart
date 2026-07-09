@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/body_part.dart';
 import '../../core/theme.dart';
 import 'exercise.dart';
 import 'exercise_providers.dart';
@@ -14,11 +15,11 @@ class ExerciseListPage extends ConsumerWidget {
     final async = ref.watch(exerciseListProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('动作库'),
+        title: const Text('动作库 💪'),
         actions: [
           IconButton(
             tooltip: '刷新',
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: () => ref.invalidate(exerciseListProvider),
           ),
         ],
@@ -28,18 +29,25 @@ class ExerciseListPage extends ConsumerWidget {
         error: (e, _) => _ErrorView(message: '$e', onRetry: () => ref.invalidate(exerciseListProvider)),
         data: (list) {
           if (list.isEmpty) {
-            return const Center(child: Text('动作库还是空的'));
+            return const Center(child: Text('还没有动作，去加一个吧 ✨'));
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(exerciseListProvider),
             child: ListView.separated(
               padding: const EdgeInsets.all(AppTheme.pad),
-              itemCount: list.length,
+              itemCount: list.length + 1,
               separatorBuilder: (_, _) => const SizedBox(height: AppTheme.gap),
-              itemBuilder: (_, i) => _ExerciseCard(
-                exercise: list[i],
-                onTap: () => context.push('/exercise-detail', extra: list[i]),
-              ),
+              itemBuilder: (_, i) {
+                if (i == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    child: Text('共 ${list.length} 个动作',
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                  );
+                }
+                final e = list[i - 1];
+                return _ExerciseCard(exercise: e, onTap: () => context.push('/exercise-detail', extra: e));
+              },
             ),
           );
         },
@@ -56,38 +64,47 @@ class _ExerciseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    final s = bodyPartStyle(exercise.bodyPart);
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(AppTheme.radius),
       child: InkWell(
+        borderRadius: BorderRadius.circular(AppTheme.radius),
         onTap: onTap,
-        child: Padding(
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.radius),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+          ),
           padding: const EdgeInsets.all(AppTheme.gap),
           child: Row(
             children: [
-              _Thumb(url: exercise.imageUrl),
-              const SizedBox(width: AppTheme.gap),
+              _Thumb(url: exercise.imageUrl, style: s),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(exercise.name, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
+                    Text(exercise.name,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    Row(
                       children: [
-                        _Tag(exercise.bodyPart, scheme.primary),
-                        if (exercise.equipment != null) _Tag(exercise.equipment!, scheme.tertiary),
+                        _Chip('${s.emoji} ${exercise.bodyPart}', s.color),
+                        if (exercise.equipment != null) ...[
+                          const SizedBox(width: 6),
+                          _Chip(exercise.equipment!, Colors.blueGrey),
+                        ],
                       ],
                     ),
+                    if ((exercise.difficulty ?? 0) > 0) ...[
+                      const SizedBox(height: 6),
+                      Text(difficultyFlames(exercise.difficulty), style: const TextStyle(fontSize: 12)),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              _Difficulty(level: exercise.difficulty ?? 0),
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right, color: scheme.outline),
+              Icon(Icons.arrow_forward_ios_rounded, size: 15, color: Colors.grey.shade400),
             ],
           ),
         ),
@@ -97,37 +114,36 @@ class _ExerciseCard extends StatelessWidget {
 }
 
 class _Thumb extends StatelessWidget {
-  const _Thumb({this.url});
+  const _Thumb({this.url, required this.style});
 
   final String? url;
+  final BodyPartStyle style;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    const size = 56.0;
+    const size = 60.0;
     Widget placeholder() => Container(
           width: size,
           height: size,
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-          child: Icon(Icons.fitness_center, color: scheme.primary.withValues(alpha: 0.6)),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: style.color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(style.emoji, style: const TextStyle(fontSize: 30)),
         );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(14),
       child: (url == null || url!.isEmpty)
           ? placeholder()
-          : Image.network(
-              url!,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder(),
-            ),
+          : Image.network(url!, width: size, height: size, fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => placeholder()),
     );
   }
 }
 
-class _Tag extends StatelessWidget {
-  const _Tag(this.text, this.color);
+class _Chip extends StatelessWidget {
+  const _Chip(this.text, this.color);
 
   final String text;
   final Color color;
@@ -135,33 +151,9 @@ class _Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
-    );
-  }
-}
-
-class _Difficulty extends StatelessWidget {
-  const _Difficulty({required this.level});
-
-  final int level;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(
-        5,
-        (i) => Icon(
-          Icons.circle,
-          size: 7,
-          color: i < level ? Colors.orange : Colors.grey.shade300,
-        ),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+      child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -180,7 +172,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 40),
+            const Text('😵', style: TextStyle(fontSize: 40)),
             const SizedBox(height: 12),
             Text('加载失败：$message', textAlign: TextAlign.center),
             const SizedBox(height: 16),
