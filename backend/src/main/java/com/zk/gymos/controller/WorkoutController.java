@@ -51,6 +51,11 @@ public class WorkoutController {
         return Results.success();
     }
 
+    @PostMapping("/plans/{planId}/activate")
+    public Result<PlanResponse> activatePlan(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID planId) {
+        return Results.success(workoutService.activatePlan(uid(jwt), planId));
+    }
+
     // ----- days -----
 
     @GetMapping("/plans/{planId}/days")

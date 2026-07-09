@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
+import '../workout/today_section.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -58,9 +59,9 @@ class HomePage extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: AppTheme.pad),
-            const _HeroCard(),
+            const TodaySection(),
             const SizedBox(height: 24),
-            Text('  开始训练', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            Text('  快捷入口', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: AppTheme.gap),
             _FeatureCard(
               emoji: '💪',
@@ -87,45 +88,6 @@ class HomePage extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _HeroCard extends StatelessWidget {
-  const _HeroCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFF6366F1).withValues(alpha: 0.35), blurRadius: 24, offset: const Offset(0, 8)),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('今天，练哪里？',
-                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-                SizedBox(height: 6),
-                Text('坚持，是最好的天赋',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
-              ],
-            ),
-          ),
-          Text('🏋️', style: TextStyle(fontSize: 44)),
-        ],
       ),
     );
   }

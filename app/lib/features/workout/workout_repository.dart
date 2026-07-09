@@ -7,6 +7,8 @@ class WorkoutRepository {
 
   static Future<void> deletePlan(String planId) => ApiClient.delete('/api/plans/$planId');
 
+  static Future<void> activatePlan(String planId) => ApiClient.post('/api/plans/$planId/activate', {});
+
   static Future<void> addDay(String planId, String title) =>
       ApiClient.post('/api/plans/$planId/days', {'title': title});
 

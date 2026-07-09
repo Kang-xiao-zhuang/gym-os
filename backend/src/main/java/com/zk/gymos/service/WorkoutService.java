@@ -65,6 +65,20 @@ public class WorkoutService {
         return PlanResponse.of(planRepo.save(p));
     }
 
+    /** Mark one plan active and deactivate the user's other plans (only one "current" plan). */
+    @Transactional
+    public PlanResponse activatePlan(UUID userId, UUID planId) {
+        WorkoutPlan target = requirePlan(userId, planId);
+        for (WorkoutPlan p : planRepo.findByUserIdOrderByCreatedAtDesc(userId)) {
+            if (Boolean.TRUE.equals(p.getIsActive()) && !p.getId().equals(planId)) {
+                p.setIsActive(false);
+                planRepo.save(p);
+            }
+        }
+        target.setIsActive(true);
+        return PlanResponse.of(planRepo.save(target));
+    }
+
     @Transactional
     public void deletePlan(UUID userId, UUID planId) {
         requirePlan(userId, planId);
