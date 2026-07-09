@@ -1,13 +1,21 @@
 // Models for the training-plan module: Plan → Day → DayExercise.
 
+/// Preset emoji icons users can pick for a plan.
+const List<String> kPlanIcons = [
+  '📅', '💪', '🔥', '🏋️', '🦾', '🦵', '🎯', '⚡', '🏆', '🧘', '🚴', '🏃'
+];
+
 class Plan {
-  Plan({required this.id, required this.name, this.description, this.totalWeeks, this.isActive});
+  Plan({required this.id, required this.name, this.description, this.totalWeeks, this.isActive, this.icon});
 
   final String id;
   final String name;
   final String? description;
   final int? totalWeeks;
   final bool? isActive;
+  final String? icon;
+
+  String get displayIcon => (icon != null && icon!.isNotEmpty) ? icon! : '📅';
 
   factory Plan.fromJson(Map<String, dynamic> j) => Plan(
         id: j['id'] as String,
@@ -15,6 +23,7 @@ class Plan {
         description: j['description'] as String?,
         totalWeeks: (j['totalWeeks'] as num?)?.toInt(),
         isActive: j['isActive'] as bool?,
+        icon: j['icon'] as String?,
       );
 }
 

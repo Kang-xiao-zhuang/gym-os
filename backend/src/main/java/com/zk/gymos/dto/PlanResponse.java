@@ -11,10 +11,11 @@ public record PlanResponse(
         String description,
         Integer totalWeeks,
         Boolean isActive,
+        String icon,
         OffsetDateTime createdAt
 ) {
     public static PlanResponse of(WorkoutPlan p) {
         return new PlanResponse(p.getId(), p.getName(), p.getDescription(),
-                p.getTotalWeeks(), p.getIsActive(), p.getCreatedAt());
+                p.getTotalWeeks(), p.getIsActive(), p.getIcon(), p.getCreatedAt());
     }
 }

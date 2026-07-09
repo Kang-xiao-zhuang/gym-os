@@ -50,6 +50,7 @@ public class WorkoutService {
         p.setUserId(userId);
         p.setName(req.name());
         p.setDescription(req.description());
+        p.setIcon(req.icon());
         if (req.totalWeeks() != null) p.setTotalWeeks(req.totalWeeks());
         if (req.isActive() != null) p.setIsActive(req.isActive());
         return PlanResponse.of(planRepo.save(p));
@@ -60,6 +61,7 @@ public class WorkoutService {
         WorkoutPlan p = requirePlan(userId, planId);
         p.setName(req.name());
         p.setDescription(req.description());
+        if (req.icon() != null) p.setIcon(req.icon());
         if (req.totalWeeks() != null) p.setTotalWeeks(req.totalWeeks());
         if (req.isActive() != null) p.setIsActive(req.isActive());
         return PlanResponse.of(planRepo.save(p));

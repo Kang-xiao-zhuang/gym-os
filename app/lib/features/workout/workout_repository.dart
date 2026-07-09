@@ -2,15 +2,15 @@ import '../../core/api_client.dart';
 
 /// Backend calls for the training-plan module.
 class WorkoutRepository {
-  static Future<void> createPlan(String name, String? description) =>
-      ApiClient.post('/api/plans', {'name': name, 'description': description});
+  static Future<void> createPlan(String name, String? description, {String? icon}) =>
+      ApiClient.post('/api/plans', {'name': name, 'description': description, 'icon': icon});
 
   static Future<void> deletePlan(String planId) => ApiClient.delete('/api/plans/$planId');
 
   static Future<void> activatePlan(String planId) => ApiClient.post('/api/plans/$planId/activate', {});
 
-  static Future<void> updatePlan(String id, {required String name, String? description}) =>
-      ApiClient.put('/api/plans/$id', {'name': name, 'description': description});
+  static Future<void> updatePlan(String id, {required String name, String? description, String? icon}) =>
+      ApiClient.put('/api/plans/$id', {'name': name, 'description': description, 'icon': icon});
 
   static Future<void> updateDay(String dayId, String title) =>
       ApiClient.put('/api/days/$dayId', {'title': title});

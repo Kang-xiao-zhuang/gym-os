@@ -34,7 +34,7 @@ class _TodaySectionState extends ConsumerState<TodaySection> {
             child: Text('选择进行中的计划', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ),
           ...plans.map((p) => ListTile(
-                leading: const Text('📅', style: TextStyle(fontSize: 22)),
+                leading: Text(p.displayIcon, style: const TextStyle(fontSize: 22)),
                 title: Text(p.name),
                 trailing: p.isActive == true ? const Icon(Icons.check_circle, color: Colors.green) : null,
                 onTap: () => Navigator.pop(context, p),
@@ -125,7 +125,8 @@ class _ActivePlanToday extends ConsumerWidget {
         _Hero(
           child: Row(
             children: [
-              const Text('今天 · ', style: TextStyle(color: Colors.white70, fontSize: 14)),
+              Text(plan.displayIcon, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(plan.name,
                     maxLines: 1,

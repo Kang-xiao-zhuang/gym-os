@@ -14,6 +14,8 @@ public record PlanRequest(
 
         Integer totalWeeks,
 
-        Boolean isActive
+        Boolean isActive,
+
+        String icon
 ) {
 }

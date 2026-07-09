@@ -34,4 +34,8 @@ public class WorkoutPlan extends BaseEntity {
 
     @Column(name = "is_active")
     private Boolean isActive = false;
+
+    /** User-chosen emoji icon for the plan. */
+    @Column(length = 16)
+    private String icon;
 }

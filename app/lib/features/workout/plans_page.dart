@@ -14,27 +14,34 @@ class PlansPage extends ConsumerWidget {
   Future<void> _createDialog(BuildContext context, WidgetRef ref) async {
     final name = TextEditingController();
     final desc = TextEditingController();
+    var icon = '📅';
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('新建训练计划'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: name, decoration: const InputDecoration(labelText: '计划名称', hintText: '例如：夏季增肌')),
-            const SizedBox(height: 12),
-            TextField(controller: desc, decoration: const InputDecoration(labelText: '简介（可选）')),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('新建训练计划'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _PlanIconPicker(selected: icon, onPick: (e) => setLocal(() => icon = e)),
+              const SizedBox(height: 12),
+              TextField(controller: name, decoration: const InputDecoration(labelText: '计划名称', hintText: '例如：夏季增肌')),
+              const SizedBox(height: 12),
+              TextField(controller: desc, decoration: const InputDecoration(labelText: '简介（可选）')),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('创建')),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('创建')),
-        ],
       ),
     );
     if (ok == true && name.text.trim().isNotEmpty) {
       try {
-        await WorkoutRepository.createPlan(name.text.trim(), desc.text.trim().isEmpty ? null : desc.text.trim());
+        await WorkoutRepository.createPlan(
+            name.text.trim(), desc.text.trim().isEmpty ? null : desc.text.trim(),
+            icon: icon);
         ref.invalidate(plansProvider);
       } catch (e) {
         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('创建失败：$e')));
@@ -45,31 +52,37 @@ class PlansPage extends ConsumerWidget {
   Future<void> _rename(BuildContext context, WidgetRef ref, Plan p) async {
     final name = TextEditingController(text: p.name);
     final desc = TextEditingController(text: p.description ?? '');
+    var icon = p.displayIcon;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('重命名计划'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: '计划名称')),
-            const SizedBox(height: 12),
-            TextField(controller: desc, decoration: const InputDecoration(labelText: '简介（可选）')),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('编辑计划'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _PlanIconPicker(selected: icon, onPick: (e) => setLocal(() => icon = e)),
+              const SizedBox(height: 12),
+              TextField(controller: name, decoration: const InputDecoration(labelText: '计划名称')),
+              const SizedBox(height: 12),
+              TextField(controller: desc, decoration: const InputDecoration(labelText: '简介（可选）')),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('保存')),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('保存')),
-        ],
       ),
     );
     if (ok == true && name.text.trim().isNotEmpty) {
       try {
         await WorkoutRepository.updatePlan(p.id,
-            name: name.text.trim(), description: desc.text.trim().isEmpty ? null : desc.text.trim());
+            name: name.text.trim(), description: desc.text.trim().isEmpty ? null : desc.text.trim(),
+            icon: icon);
         ref.invalidate(plansProvider);
       } catch (e) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('重命名失败：$e')));
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败：$e')));
       }
     }
   }
@@ -137,7 +150,7 @@ class PlansPage extends ConsumerWidget {
                       padding: const EdgeInsets.all(AppTheme.pad),
                       child: Row(
                         children: [
-                          const Text('📅', style: TextStyle(fontSize: 28)),
+                          Text(p.displayIcon, style: const TextStyle(fontSize: 28)),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Column(
@@ -155,7 +168,7 @@ class PlansPage extends ConsumerWidget {
                           PopupMenuButton<String>(
                             onSelected: (v) => v == 'rename' ? _rename(context, ref, p) : _delete(context, ref, p),
                             itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'rename', child: Text('重命名')),
+                              PopupMenuItem(value: 'rename', child: Text('编辑')),
                               PopupMenuItem(value: 'del', child: Text('删除')),
                             ],
                           ),
@@ -165,6 +178,45 @@ class PlansPage extends ConsumerWidget {
                   ),
                 );
               },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Horizontal emoji picker for a plan's icon.
+class _PlanIconPicker extends StatelessWidget {
+  const _PlanIconPicker({required this.selected, required this.onPick});
+
+  final String selected;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: kPlanIcons.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final e = kPlanIcons[i];
+          final sel = e == selected;
+          return GestureDetector(
+            onTap: () => onPick(e),
+            child: Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: sel ? scheme.primary.withValues(alpha: 0.18) : scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                border: sel ? Border.all(color: scheme.primary, width: 2) : null,
+              ),
+              child: Text(e, style: const TextStyle(fontSize: 22)),
             ),
           );
         },
