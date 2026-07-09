@@ -196,31 +196,26 @@ class _PlanIconPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: kPlanIcons.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final e = kPlanIcons[i];
-          final sel = e == selected;
-          return GestureDetector(
-            onTap: () => onPick(e),
-            child: Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: sel ? scheme.primary.withValues(alpha: 0.18) : scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                border: sel ? Border.all(color: scheme.primary, width: 2) : null,
-              ),
-              child: Text(e, style: const TextStyle(fontSize: 22)),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: kPlanIcons.map((e) {
+        final sel = e == selected;
+        return GestureDetector(
+          onTap: () => onPick(e),
+          child: Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: sel ? scheme.primary.withValues(alpha: 0.18) : scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+              border: sel ? Border.all(color: scheme.primary, width: 2) : null,
             ),
-          );
-        },
-      ),
+            child: Text(e, style: const TextStyle(fontSize: 22)),
+          ),
+        );
+      }).toList(),
     );
   }
 }
