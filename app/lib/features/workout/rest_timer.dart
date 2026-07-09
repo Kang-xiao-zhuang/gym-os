@@ -7,6 +7,7 @@ Future<void> showRestTimer(BuildContext context, int seconds) {
   return showModalBottomSheet(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
     builder: (_) => RestTimerSheet(seconds: seconds <= 0 ? 60 : seconds),
   );
 }
@@ -28,17 +29,12 @@ class _RestTimerSheetState extends State<RestTimerSheet> {
   @override
   void initState() {
     super.initState();
-    _start();
-  }
-
-  void _start() {
-    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _remaining--);
       if (_remaining <= 0) {
         _timer?.cancel();
-        if (mounted) Navigator.of(context).maybePop();
+        Navigator.of(context).maybePop();
       }
     });
   }
@@ -62,44 +58,49 @@ class _RestTimerSheetState extends State<RestTimerSheet> {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('组间休息 ⏱', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: 160,
-            height: 160,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 160,
-                  height: 160,
-                  child: CircularProgressIndicator(
-                    value: _total == 0 ? 0 : (_remaining.clamp(0, _total)) / _total,
-                    strokeWidth: 12,
-                    strokeCap: StrokeCap.round,
-                    color: color,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ),
-                ),
-                Text(_fmt, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w800)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+    final progress = _total <= 0 ? 0.0 : (_remaining.clamp(0, _total)) / _total;
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              OutlinedButton(onPressed: () => _add(30), child: const Text('+30秒')),
-              const SizedBox(width: 12),
-              FilledButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('跳过')),
+              const Text('组间休息 ⏱', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: 140,
+                height: 140,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      height: 140,
+                      child: CircularProgressIndicator(
+                        value: progress.toDouble(),
+                        strokeWidth: 11,
+                        strokeCap: StrokeCap.round,
+                        color: color,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                    ),
+                    Text(_fmt, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton(onPressed: () => _add(30), child: const Text('+30秒')),
+                  const SizedBox(width: 12),
+                  FilledButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('跳过')),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

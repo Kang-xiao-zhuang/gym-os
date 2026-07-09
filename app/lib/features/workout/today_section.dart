@@ -335,6 +335,8 @@ class _ChecklistState extends ConsumerState<_Checklist> {
                       IconButton(
                         tooltip: '组间休息',
                         visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                         icon: Icon(Icons.timer_outlined, size: 20, color: Colors.grey.shade500),
                         onPressed: () => showRestTimer(context, e.restSeconds ?? 90),
                       ),
