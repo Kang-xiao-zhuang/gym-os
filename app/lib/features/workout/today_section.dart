@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/body_part.dart';
+import '../history/session_providers.dart';
 import 'rest_timer.dart';
 import 'workout_models.dart';
 import 'workout_providers.dart';
@@ -246,6 +247,30 @@ class _ChecklistState extends ConsumerState<_Checklist> {
     CompletionStore.save(widget.dayId, _done);
   }
 
+  Future<void> _finish(List<DayExercise> items) async {
+    final completed = items.where((e) => _done.contains(e.id)).map((e) => e.exerciseId).toList();
+    if (completed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('先勾选完成的动作 💪')));
+      return;
+    }
+    try {
+      await WorkoutRepository.finishSession(
+        dayId: widget.dayId,
+        startedAt: _start,
+        durationMinutes: _elapsed.inMinutes,
+        exerciseIds: completed,
+      );
+      await CompletionStore.save(widget.dayId, {});
+      ref.invalidate(sessionsProvider);
+      if (mounted) {
+        setState(() => _done.clear());
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('训练已记录 🎉 干得漂亮！')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('记录失败：$e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(dayExercisesProvider(widget.dayId));
@@ -354,6 +379,15 @@ class _ChecklistState extends ConsumerState<_Checklist> {
                 ),
               );
             }),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _finish(items),
+                icon: const Icon(Icons.check_circle_outline_rounded),
+                label: const Text('完成训练'),
+              ),
+            ),
           ],
         );
       },
