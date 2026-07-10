@@ -105,15 +105,16 @@ class _ExerciseCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(exercise.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: [
                         _Chip('${s.emoji} ${exercise.bodyPart}', s.color),
-                        if (exercise.equipment != null) ...[
-                          const SizedBox(width: 6),
-                          _Chip(exercise.equipment!, Colors.blueGrey),
-                        ],
+                        if (exercise.equipment != null) _Chip(exercise.equipment!, Colors.blueGrey),
                       ],
                     ),
                     if ((exercise.difficulty ?? 0) > 0) ...[

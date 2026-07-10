@@ -156,7 +156,10 @@ class PlansPage extends ConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(p.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                Text(p.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                                 if (p.description != null && p.description!.isNotEmpty) ...[
                                   const SizedBox(height: 2),
                                   Text(p.description!, maxLines: 1, overflow: TextOverflow.ellipsis,
