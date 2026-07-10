@@ -2,6 +2,7 @@ package com.zk.gymos.service;
 
 import com.zk.gymos.common.BusinessException;
 import com.zk.gymos.common.ResultCode;
+import com.zk.gymos.dto.LastPerformanceResponse;
 import com.zk.gymos.dto.SessionDetailResponse;
 import com.zk.gymos.dto.SessionRequest;
 import com.zk.gymos.dto.SessionResponse;
@@ -105,6 +106,20 @@ public class SessionService {
         return new SessionDetailResponse(s.getId(), dayTitle(s.getWorkoutDayId()),
                 s.getStartedAt(), s.getFinishedAt(), s.getDurationMinutes(),
                 logs.size(), volume(logs), exercises);
+    }
+
+    /** Latest logged performance of an exercise (null if never done). */
+    @Transactional(readOnly = true)
+    public LastPerformanceResponse lastPerformance(UUID userId, UUID exerciseId) {
+        List<WorkoutLog> logs = logRepo.findByUserAndExerciseNewestFirst(userId, exerciseId);
+        if (logs.isEmpty()) return null;
+        UUID latestSession = logs.getFirst().getSessionId();
+        List<LastPerformanceResponse.SetLog> sets = logs.stream()
+                .filter(l -> latestSession.equals(l.getSessionId()))
+                .sorted(Comparator.comparing(l -> l.getSetNo() == null ? 0 : l.getSetNo()))
+                .map(l -> new LastPerformanceResponse.SetLog(l.getSetNo(), l.getWeight(), l.getReps()))
+                .toList();
+        return new LastPerformanceResponse(logs.getFirst().getCreatedAt(), sets);
     }
 
     @Transactional

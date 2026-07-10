@@ -54,4 +54,10 @@ class WorkoutRepository {
       });
 
   static Future<void> deleteSession(String id) => ApiClient.delete('/api/sessions/$id');
+
+  /// Latest performance of an exercise; null if never done.
+  static Future<Map<String, dynamic>?> lastPerformance(String exerciseId) async {
+    final data = await ApiClient.get('/api/sessions/last/$exerciseId');
+    return data as Map<String, dynamic>?;
+  }
 }

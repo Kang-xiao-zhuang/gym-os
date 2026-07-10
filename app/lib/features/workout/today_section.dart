@@ -318,6 +318,9 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
         logs: logs,
       );
       ref.invalidate(sessionsProvider);
+      for (final e in items) {
+        ref.invalidate(lastPerformanceProvider(e.exerciseId));
+      }
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -461,7 +464,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
       );
 }
 
-class _ExerciseSets extends StatelessWidget {
+class _ExerciseSets extends ConsumerWidget {
   const _ExerciseSets({
     required this.exercise,
     required this.rows,
@@ -479,12 +482,13 @@ class _ExerciseSets extends StatelessWidget {
   final Widget Function(TextEditingController, String) numField;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final s = bodyPartStyle(exercise.bodyPart ?? '');
     final target = [
       if (exercise.targetSets != null && exercise.targetReps != null)
         '目标 ${exercise.targetSets}×${exercise.targetReps}',
     ].join();
+    final last = ref.watch(lastPerformanceProvider(exercise.exerciseId));
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -510,6 +514,16 @@ class _ExerciseSets extends StatelessWidget {
                   onPressed: () => showRestTimer(context, exercise.restSeconds ?? 90),
                 ),
               ],
+            ),
+            last.maybeWhen(
+              data: (txt) => txt == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 2, left: 28),
+                      child: Text('上次 $txt',
+                          style: TextStyle(fontSize: 12, color: s.color, fontWeight: FontWeight.w500)),
+                    ),
+              orElse: () => const SizedBox.shrink(),
             ),
             const SizedBox(height: 4),
             ...rows.map((r) => Padding(

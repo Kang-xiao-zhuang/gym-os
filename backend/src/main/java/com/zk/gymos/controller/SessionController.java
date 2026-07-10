@@ -2,6 +2,7 @@ package com.zk.gymos.controller;
 
 import com.zk.gymos.common.Result;
 import com.zk.gymos.common.Results;
+import com.zk.gymos.dto.LastPerformanceResponse;
 import com.zk.gymos.dto.SessionDetailResponse;
 import com.zk.gymos.dto.SessionRequest;
 import com.zk.gymos.dto.SessionResponse;
@@ -41,6 +42,12 @@ public class SessionController {
     @GetMapping("/{id}")
     public Result<SessionDetailResponse> detail(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         return Results.success(sessionService.detail(uid(jwt), id));
+    }
+
+    /** Latest logged performance of an exercise (data is null if never done). */
+    @GetMapping("/last/{exerciseId}")
+    public Result<LastPerformanceResponse> last(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId) {
+        return Results.success(sessionService.lastPerformance(uid(jwt), exerciseId));
     }
 
     @DeleteMapping("/{id}")
