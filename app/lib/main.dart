@@ -9,6 +9,12 @@ import 'core/theme_mode_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('=OVERFLOW_START=');
+    debugPrint(details.toString());
+    debugPrint('=OVERFLOW_END=');
+  };
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
     anonKey: AppConfig.supabaseAnonKey,
