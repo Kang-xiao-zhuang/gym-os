@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,32 @@ class DoneTodayStore {
     } else {
       await p.remove(_key(dayId));
     }
+  }
+}
+
+/// Persists in-progress set inputs (weight/reps/done per exercise) for a day+date,
+/// so a mid-workout reload doesn't lose what you've entered.
+class ProgressStore {
+  static String _key(String dayId) {
+    final n = DateTime.now();
+    return 'progress_${dayId}_${n.year}-${n.month}-${n.day}';
+  }
+
+  static Future<Map<String, dynamic>?> load(String dayId) async {
+    final p = await SharedPreferences.getInstance();
+    final s = p.getString(_key(dayId));
+    if (s == null) return null;
+    return jsonDecode(s) as Map<String, dynamic>;
+  }
+
+  static Future<void> save(String dayId, Map<String, dynamic> data) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_key(dayId), jsonEncode(data));
+  }
+
+  static Future<void> clear(String dayId) async {
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_key(dayId));
   }
 }
 
@@ -237,15 +264,35 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
   /// null = still loading the "done today" flag.
   bool? _doneToday;
 
+  /// Saved in-progress inputs (exId → list of {w,reps,done}); null until loaded.
+  Map<String, dynamic>? _saved;
+
   @override
   void initState() {
     super.initState();
-    DoneTodayStore.isDone(widget.dayId).then((v) {
-      if (mounted) setState(() => _doneToday = v);
-    });
+    () async {
+      final done = await DoneTodayStore.isDone(widget.dayId);
+      final saved = await ProgressStore.load(widget.dayId);
+      if (mounted) {
+        setState(() {
+          _doneToday = done;
+          _saved = saved;
+        });
+      }
+    }();
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _elapsed = DateTime.now().difference(_start));
     });
+  }
+
+  void _persist() {
+    final map = <String, dynamic>{};
+    _rows.forEach((exId, rows) {
+      map[exId] = rows
+          .map((r) => {'w': r.weight.text, 'reps': r.reps.text, 'done': r.done})
+          .toList();
+    });
+    ProgressStore.save(widget.dayId, map);
   }
 
   @override
@@ -264,6 +311,19 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
 
   List<_SetRow> _rowsFor(DayExercise e) {
     return _rows.putIfAbsent(e.id, () {
+      final savedRows = _saved?[e.id] as List<dynamic>?;
+      if (savedRows != null && savedRows.isNotEmpty) {
+        return savedRows.asMap().entries.map((en) {
+          final m = en.value as Map<String, dynamic>;
+          final row = _SetRow(
+            en.key + 1,
+            TextEditingController(text: m['w']?.toString() ?? ''),
+            TextEditingController(text: m['reps']?.toString() ?? ''),
+          );
+          row.done = m['done'] == true;
+          return row;
+        }).toList();
+      }
       final n = (e.targetSets ?? 1).clamp(1, 12);
       return List.generate(
         n,
@@ -281,6 +341,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
           TextEditingController(text: last?.weight.text ?? _fmtW(e.targetWeight)),
           TextEditingController(text: last?.reps.text ?? (e.targetReps?.toString() ?? '')),
         )));
+    _persist();
   }
 
   void _removeSet(DayExercise e) {
@@ -290,6 +351,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
     r.weight.dispose();
     r.reps.dispose();
     setState(() {});
+    _persist();
   }
 
   String get _elapsedText {
@@ -372,6 +434,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
         ),
       );
       await DoneTodayStore.setDone(widget.dayId, true);
+      await ProgressStore.clear(widget.dayId);
       if (mounted) {
         setState(() {
           for (final rows in _rows.values) {
@@ -381,6 +444,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
             }
           }
           _rows.clear();
+          _saved = null;
           _doneToday = true;
         });
       }
@@ -391,9 +455,11 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
 
   Future<void> _trainAgain() async {
     await DoneTodayStore.setDone(widget.dayId, false);
+    await ProgressStore.clear(widget.dayId);
     if (mounted) {
       setState(() {
         _doneToday = false;
+        _saved = null;
         _start = DateTime.now();
         _elapsed = Duration.zero;
       });
@@ -500,6 +566,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
                   rows: _rowsFor(e),
                   onToggle: (r) {
                     setState(() => r.done = !r.done);
+                    _persist();
                     if (r.done) showRestTimer(context, e.restSeconds ?? 90);
                   },
                   onAdd: () => _addSet(e),
@@ -527,7 +594,10 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
           controller: c,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           textAlign: TextAlign.center,
-          onChanged: (_) => setState(() {}),
+          onChanged: (_) {
+            setState(() {});
+            _persist();
+          },
           decoration: InputDecoration(
             hintText: hint,
             isDense: true,

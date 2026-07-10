@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -96,6 +97,7 @@ class _ExerciseDetailPageState extends ConsumerState<ExerciseDetailPage> {
           ),
           const SizedBox(height: 20),
           _PrCard(exerciseId: e.id),
+          _TrendCard(exerciseId: e.id, color: s.color),
           if (e.description != null) ...[
             const SizedBox(height: 20),
             Text('📝 动作说明',
@@ -162,6 +164,82 @@ class _PrCard extends ConsumerWidget {
           ],
         ),
       );
+}
+
+/// Small max-weight trend line for the exercise. Hidden until ≥2 sessions.
+class _TrendCard extends ConsumerWidget {
+  const _TrendCard({required this.exerciseId, required this.color});
+
+  final String exerciseId;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trend = ref.watch(exerciseTrendProvider(exerciseId));
+    return trend.maybeWhen(
+      data: (weights) {
+        if (weights.length < 2) return const SizedBox.shrink();
+        final spots = [for (var i = 0; i < weights.length; i++) FlSpot(i.toDouble(), weights[i])];
+        final minY = weights.reduce((a, b) => a < b ? a : b) - 2;
+        final maxY = weights.reduce((a, b) => a > b ? a : b) + 2;
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(AppTheme.radius),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 8, bottom: 8),
+                  child: Text('📈 最大重量趋势', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                SizedBox(
+                  height: 140,
+                  child: LineChart(
+                    LineChartData(
+                      minY: minY,
+                      maxY: maxY,
+                      gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: ((maxY - minY) / 3).clamp(0.5, 1e6)),
+                      borderData: FlBorderData(show: false),
+                      titlesData: const FlTitlesData(
+                        topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 34)),
+                      ),
+                      lineTouchData: const LineTouchData(enabled: true),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: spots,
+                          isCurved: true,
+                          color: color,
+                          barWidth: 3,
+                          dotData: const FlDotData(show: true),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            gradient: LinearGradient(
+                              colors: [color.withValues(alpha: 0.25), color.withValues(alpha: 0.0)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
 }
 
 class _ImageHeader extends StatelessWidget {

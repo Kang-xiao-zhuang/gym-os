@@ -2,6 +2,7 @@ package com.zk.gymos.controller;
 
 import com.zk.gymos.common.Result;
 import com.zk.gymos.common.Results;
+import com.zk.gymos.dto.ExerciseTrendResponse;
 import com.zk.gymos.dto.LastPerformanceResponse;
 import com.zk.gymos.dto.PrResponse;
 import com.zk.gymos.dto.SessionDetailResponse;
@@ -55,6 +56,12 @@ public class SessionController {
     @GetMapping("/pr/{exerciseId}")
     public Result<PrResponse> pr(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId) {
         return Results.success(sessionService.personalRecord(uid(jwt), exerciseId));
+    }
+
+    /** Per-session trend (max weight + volume) of an exercise, oldest→newest. */
+    @GetMapping("/trend/{exerciseId}")
+    public Result<ExerciseTrendResponse> trend(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId) {
+        return Results.success(sessionService.trend(uid(jwt), exerciseId));
     }
 
     @DeleteMapping("/{id}")

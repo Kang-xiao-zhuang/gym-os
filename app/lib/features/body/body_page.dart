@@ -141,11 +141,14 @@ class _BodyPageState extends ConsumerState<BodyPage> {
             );
           }
           final withData = _metrics.where((m) => items.any((e) => e.valueOf(m.key) != null)).toList();
-          if (!withData.any((m) => m.key == _metricKey) && withData.isNotEmpty) {
+          if (_metricKey != 'all' && !withData.any((m) => m.key == _metricKey) && withData.isNotEmpty) {
             _metricKey = withData.first.key;
           }
-          final selected = _metrics.firstWhere((m) => m.key == _metricKey);
-          final series = items.where((e) => e.valueOf(_metricKey) != null).toList();
+          final isAll = _metricKey == 'all';
+          final selected = isAll
+              ? withData.first
+              : _metrics.firstWhere((m) => m.key == _metricKey, orElse: () => withData.first);
+          final series = items.where((e) => e.valueOf(selected.key) != null).toList();
 
           final goal = ref.watch(goalWeightProvider);
           return RefreshIndicator(
@@ -165,14 +168,21 @@ class _BodyPageState extends ConsumerState<BodyPage> {
                   height: 36,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    itemCount: withData.length,
+                    itemCount: withData.length + 1,
                     separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (_, i) {
-                      final m = withData[i];
-                      final sel = m.key == _metricKey;
+                      if (i == 0) {
+                        return ChoiceChip(
+                          label: const Text('📊 全部'),
+                          selected: isAll,
+                          selectedColor: const Color(0xFF6366F1).withValues(alpha: 0.18),
+                          onSelected: (_) => setState(() => _metricKey = 'all'),
+                        );
+                      }
+                      final m = withData[i - 1];
                       return ChoiceChip(
                         label: Text('${m.emoji} ${m.label}'),
-                        selected: sel,
+                        selected: m.key == _metricKey,
                         selectedColor: m.color.withValues(alpha: 0.18),
                         onSelected: (_) => setState(() => _metricKey = m.key),
                       );
@@ -180,7 +190,7 @@ class _BodyPageState extends ConsumerState<BodyPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _TrendChart(metric: selected, series: series),
+                if (isAll) _CompositeChart(items: items, metrics: withData) else _TrendChart(metric: selected, series: series),
                 const SizedBox(height: 20),
                 Text('  各项指标', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 10),
@@ -390,6 +400,103 @@ class _TrendChart extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// All metrics on one chart. Each metric is min-max normalized to 0–1 (量级不同
+/// 无法同轴直接比较), so lines show *relative* trend; a legend maps color→metric.
+class _CompositeChart extends StatelessWidget {
+  const _CompositeChart({required this.items, required this.metrics});
+
+  final List<Measurement> items;
+  final List<_Metric> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final bars = <LineChartBarData>[];
+    for (final m in metrics) {
+      final idx = <int>[];
+      final vals = <double>[];
+      for (var i = 0; i < items.length; i++) {
+        final v = items[i].valueOf(m.key);
+        if (v != null) {
+          idx.add(i);
+          vals.add(v);
+        }
+      }
+      if (vals.length < 2) continue;
+      final lo = vals.reduce((a, b) => a < b ? a : b);
+      final hi = vals.reduce((a, b) => a > b ? a : b);
+      final range = (hi - lo).abs() < 1e-9 ? 1.0 : hi - lo;
+      final spots = [for (var k = 0; k < idx.length; k++) FlSpot(idx[k].toDouble(), (vals[k] - lo) / range)];
+      bars.add(LineChartBarData(
+        spots: spots,
+        isCurved: true,
+        color: m.color,
+        barWidth: 2.5,
+        dotData: const FlDotData(show: false),
+      ));
+    }
+    if (bars.isEmpty) {
+      return Container(
+        height: 160,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: const Color(0xFF6366F1).withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(AppTheme.radius),
+        ),
+        child: Text('多记录几次，复合趋势就出来了',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 20, 16, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF6366F1).withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                minY: -0.05,
+                maxY: 1.05,
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                titlesData: const FlTitlesData(
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                lineTouchData: const LineTouchData(enabled: false),
+                lineBarsData: bars,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            children: metrics.where((m) => items.where((e) => e.valueOf(m.key) != null).length >= 2).map((m) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 10, height: 10, decoration: BoxDecoration(color: m.color, shape: BoxShape.circle)),
+                  const SizedBox(width: 4),
+                  Text('${m.emoji} ${m.label}', style: const TextStyle(fontSize: 12)),
+                ],
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 4),
+          Text('各指标已归一化，仅看相对走势', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+        ],
       ),
     );
   }

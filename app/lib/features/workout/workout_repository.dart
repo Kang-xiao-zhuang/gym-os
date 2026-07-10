@@ -66,4 +66,10 @@ class WorkoutRepository {
     final data = await ApiClient.get('/api/sessions/pr/$exerciseId');
     return data as Map<String, dynamic>?;
   }
+
+  /// Per-session trend of an exercise (oldest→newest).
+  static Future<List<dynamic>> trend(String exerciseId) async {
+    final data = await ApiClient.get('/api/sessions/trend/$exerciseId') as Map<String, dynamic>?;
+    return (data?['points'] as List<dynamic>?) ?? const [];
+  }
 }

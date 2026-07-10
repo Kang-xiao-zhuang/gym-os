@@ -2,6 +2,7 @@ package com.zk.gymos.service;
 
 import com.zk.gymos.common.BusinessException;
 import com.zk.gymos.common.ResultCode;
+import com.zk.gymos.dto.ExerciseTrendResponse;
 import com.zk.gymos.dto.LastPerformanceResponse;
 import com.zk.gymos.dto.PrResponse;
 import com.zk.gymos.dto.SessionDetailResponse;
@@ -144,6 +145,34 @@ public class SessionService {
                 maxW.getWeight(), maxW.getReps(),
                 bestVol == null ? null : bestVol.getWeight().multiply(BigDecimal.valueOf(bestVol.getReps())),
                 maxW.getCreatedAt());
+    }
+
+    /** Per-session trend of one exercise (oldest→newest): max weight + volume each session. */
+    @Transactional(readOnly = true)
+    public ExerciseTrendResponse trend(UUID userId, UUID exerciseId) {
+        List<WorkoutLog> logs = logRepo.findByUserAndExerciseNewestFirst(userId, exerciseId);
+        // Group by session, keep each session's date (min createdAt), max weight, total volume.
+        LinkedHashMap<UUID, List<WorkoutLog>> bySession = new LinkedHashMap<>();
+        for (WorkoutLog l : logs) {
+            bySession.computeIfAbsent(l.getSessionId(), k -> new ArrayList<>()).add(l);
+        }
+        List<ExerciseTrendResponse.Point> points = new ArrayList<>();
+        for (List<WorkoutLog> group : bySession.values()) {
+            BigDecimal maxW = null;
+            BigDecimal vol = BigDecimal.ZERO;
+            OffsetDateTime date = null;
+            for (WorkoutLog l : group) {
+                if (date == null || (l.getCreatedAt() != null && l.getCreatedAt().isBefore(date))) date = l.getCreatedAt();
+                if (l.getWeight() != null) {
+                    if (maxW == null || l.getWeight().compareTo(maxW) > 0) maxW = l.getWeight();
+                    if (l.getReps() != null) vol = vol.add(l.getWeight().multiply(BigDecimal.valueOf(l.getReps())));
+                }
+            }
+            points.add(new ExerciseTrendResponse.Point(date, maxW, vol));
+        }
+        // findByUser... is newest-first; reverse to oldest→newest for charting.
+        java.util.Collections.reverse(points);
+        return new ExerciseTrendResponse(points);
     }
 
     @Transactional

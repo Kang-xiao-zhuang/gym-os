@@ -20,6 +20,15 @@ final prProvider = FutureProvider.autoDispose.family<PrInfo?, String>((ref, exer
   return PrInfo.fromJson(data);
 });
 
+/// Per-session max-weight trend for an exercise (oldest→newest, weight values).
+final exerciseTrendProvider = FutureProvider.autoDispose.family<List<double>, String>((ref, exerciseId) async {
+  final points = await WorkoutRepository.trend(exerciseId);
+  return points
+      .map((p) => ((p as Map<String, dynamic>)['maxWeight'] as num?)?.toDouble())
+      .whereType<double>()
+      .toList();
+});
+
 class PrInfo {
   PrInfo({this.maxWeight, this.maxWeightReps, this.bestSetVolume});
   final double? maxWeight;
