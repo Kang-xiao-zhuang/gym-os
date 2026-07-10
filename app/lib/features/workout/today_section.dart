@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/body_part.dart';
 import '../history/session_providers.dart';
@@ -10,6 +11,29 @@ import 'rest_timer.dart';
 import 'workout_models.dart';
 import 'workout_providers.dart';
 import 'workout_repository.dart';
+
+/// Marks whether a given training day was already completed *today*, so a
+/// reload after finishing doesn't show the workout as still pending.
+class DoneTodayStore {
+  static String _key(String dayId) {
+    final n = DateTime.now();
+    return 'done_today_${dayId}_${n.year}-${n.month}-${n.day}';
+  }
+
+  static Future<bool> isDone(String dayId) async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_key(dayId)) ?? false;
+  }
+
+  static Future<void> setDone(String dayId, bool v) async {
+    final p = await SharedPreferences.getInstance();
+    if (v) {
+      await p.setBool(_key(dayId), true);
+    } else {
+      await p.remove(_key(dayId));
+    }
+  }
+}
 
 /// The "today" home block: pick the active plan → pick which day → log sets.
 class TodaySection extends ConsumerStatefulWidget {
@@ -206,13 +230,19 @@ class _SetLogger extends ConsumerStatefulWidget {
 
 class _SetLoggerState extends ConsumerState<_SetLogger> {
   final Map<String, List<_SetRow>> _rows = {};
-  final DateTime _start = DateTime.now();
+  DateTime _start = DateTime.now();
   Duration _elapsed = Duration.zero;
   Timer? _tick;
+
+  /// null = still loading the "done today" flag.
+  bool? _doneToday;
 
   @override
   void initState() {
     super.initState();
+    DoneTodayStore.isDone(widget.dayId).then((v) {
+      if (mounted) setState(() => _doneToday = v);
+    });
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _elapsed = DateTime.now().difference(_start));
     });
@@ -267,11 +297,12 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
     return '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
   }
 
+  /// Live total volume = every set that has both weight and reps filled in
+  /// (whether or not it's checked), so the number responds as you type.
   double _volume(List<DayExercise> items) {
     var v = 0.0;
     for (final e in items) {
       for (final r in _rows[e.id] ?? const <_SetRow>[]) {
-        if (!r.done) continue;
         final w = double.tryParse(r.weight.text);
         final reps = int.tryParse(r.reps.text);
         if (w != null && reps != null) v += w * reps;
@@ -340,6 +371,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
           actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('好的'))],
         ),
       );
+      await DoneTodayStore.setDone(widget.dayId, true);
       if (mounted) {
         setState(() {
           for (final rows in _rows.values) {
@@ -349,10 +381,22 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
             }
           }
           _rows.clear();
+          _doneToday = true;
         });
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('记录失败：$e')));
+    }
+  }
+
+  Future<void> _trainAgain() async {
+    await DoneTodayStore.setDone(widget.dayId, false);
+    if (mounted) {
+      setState(() {
+        _doneToday = false;
+        _start = DateTime.now();
+        _elapsed = Duration.zero;
+      });
     }
   }
 
@@ -367,6 +411,35 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text('这天还没有动作，去计划里加', style: TextStyle(color: Colors.grey.shade600)),
+          );
+        }
+        if (_doneToday == null) {
+          return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
+        }
+        if (_doneToday == true) {
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                const Text('🎉', style: TextStyle(fontSize: 40)),
+                const SizedBox(height: 8),
+                const Text('今天已完成', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text('干得漂亮，好好恢复', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _trainAgain,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('再练一次'),
+                ),
+              ],
+            ),
           );
         }
         for (final e in items) {
