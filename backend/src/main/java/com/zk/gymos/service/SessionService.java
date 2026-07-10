@@ -3,6 +3,7 @@ package com.zk.gymos.service;
 import com.zk.gymos.common.BusinessException;
 import com.zk.gymos.common.ResultCode;
 import com.zk.gymos.dto.LastPerformanceResponse;
+import com.zk.gymos.dto.PrResponse;
 import com.zk.gymos.dto.SessionDetailResponse;
 import com.zk.gymos.dto.SessionRequest;
 import com.zk.gymos.dto.SessionResponse;
@@ -120,6 +121,29 @@ public class SessionService {
                 .map(l -> new LastPerformanceResponse.SetLog(l.getSetNo(), l.getWeight(), l.getReps()))
                 .toList();
         return new LastPerformanceResponse(logs.getFirst().getCreatedAt(), sets);
+    }
+
+    /** Personal record for an exercise (null if never logged with weight). */
+    @Transactional(readOnly = true)
+    public PrResponse personalRecord(UUID userId, UUID exerciseId) {
+        List<WorkoutLog> logs = logRepo.findByUserAndExerciseNewestFirst(userId, exerciseId);
+        WorkoutLog maxW = null;      // heaviest weight
+        WorkoutLog bestVol = null;   // best single-set volume (weight×reps)
+        for (WorkoutLog l : logs) {
+            if (l.getWeight() == null) continue;
+            if (maxW == null || l.getWeight().compareTo(maxW.getWeight()) > 0) maxW = l;
+            if (l.getReps() != null) {
+                BigDecimal vol = l.getWeight().multiply(BigDecimal.valueOf(l.getReps()));
+                BigDecimal bestVolVal = (bestVol == null || bestVol.getReps() == null) ? null
+                        : bestVol.getWeight().multiply(BigDecimal.valueOf(bestVol.getReps()));
+                if (bestVol == null || bestVolVal == null || vol.compareTo(bestVolVal) > 0) bestVol = l;
+            }
+        }
+        if (maxW == null) return null;
+        return new PrResponse(
+                maxW.getWeight(), maxW.getReps(),
+                bestVol == null ? null : bestVol.getWeight().multiply(BigDecimal.valueOf(bestVol.getReps())),
+                maxW.getCreatedAt());
     }
 
     @Transactional

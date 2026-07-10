@@ -3,6 +3,7 @@ package com.zk.gymos.controller;
 import com.zk.gymos.common.Result;
 import com.zk.gymos.common.Results;
 import com.zk.gymos.dto.LastPerformanceResponse;
+import com.zk.gymos.dto.PrResponse;
 import com.zk.gymos.dto.SessionDetailResponse;
 import com.zk.gymos.dto.SessionRequest;
 import com.zk.gymos.dto.SessionResponse;
@@ -48,6 +49,12 @@ public class SessionController {
     @GetMapping("/last/{exerciseId}")
     public Result<LastPerformanceResponse> last(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId) {
         return Results.success(sessionService.lastPerformance(uid(jwt), exerciseId));
+    }
+
+    /** Personal record of an exercise (data is null if never lifted with weight). */
+    @GetMapping("/pr/{exerciseId}")
+    public Result<PrResponse> pr(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId) {
+        return Results.success(sessionService.personalRecord(uid(jwt), exerciseId));
     }
 
     @DeleteMapping("/{id}")

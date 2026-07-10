@@ -60,4 +60,10 @@ class WorkoutRepository {
     final data = await ApiClient.get('/api/sessions/last/$exerciseId');
     return data as Map<String, dynamic>?;
   }
+
+  /// Personal record of an exercise; null if never lifted with weight.
+  static Future<Map<String, dynamic>?> personalRecord(String exerciseId) async {
+    final data = await ApiClient.get('/api/sessions/pr/$exerciseId');
+    return data as Map<String, dynamic>?;
+  }
 }

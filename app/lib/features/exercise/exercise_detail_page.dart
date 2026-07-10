@@ -94,6 +94,8 @@ class _ExerciseDetailPageState extends ConsumerState<ExerciseDetailPage> {
               if ((e.difficulty ?? 0) > 0) _Chip('难度 ${difficultyFlames(e.difficulty)}', Colors.deepOrange),
             ],
           ),
+          const SizedBox(height: 20),
+          _PrCard(exerciseId: e.id),
           if (e.description != null) ...[
             const SizedBox(height: 20),
             Text('📝 动作说明',
@@ -105,6 +107,61 @@ class _ExerciseDetailPageState extends ConsumerState<ExerciseDetailPage> {
       ),
     );
   }
+}
+
+/// Personal-record card: max weight + best single-set volume. Hidden until the
+/// exercise has been logged with weight at least once.
+class _PrCard extends ConsumerWidget {
+  const _PrCard({required this.exerciseId});
+
+  final String exerciseId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pr = ref.watch(prProvider(exerciseId));
+    return pr.maybeWhen(
+      data: (info) {
+        if (info == null || info.maxWeight == null) return const SizedBox.shrink();
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.radius),
+            gradient: const LinearGradient(
+              colors: [Color(0xFFF59E0B), Color(0xFFF97316)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('🏆 个人记录', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _prStat('最大重量', info.maxWeightLabel),
+                  _prStat('最佳单组容量', info.bestVolumeLabel),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _prStat(String label, String value) => Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            const SizedBox(height: 4),
+            Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+          ],
+        ),
+      );
 }
 
 class _ImageHeader extends StatelessWidget {
