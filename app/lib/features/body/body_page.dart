@@ -295,8 +295,11 @@ class _GoalHero extends StatelessWidget {
                 if (goal != null)
                   Row(
                     children: [
-                      Text('🎯 目标 ${goal!.toStringAsFixed(1)} kg',
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                      Flexible(
+                        child: Text('🎯 目标 ${goal!.toStringAsFixed(1)} kg',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
                       const SizedBox(width: 4),
                       InkWell(onTap: onEdit, child: const Icon(Icons.edit, size: 15, color: Colors.white70)),
                     ],
@@ -425,8 +428,11 @@ class _MetricCards extends StatelessWidget {
                 children: [
                   Text(m.emoji, style: const TextStyle(fontSize: 18)),
                   const SizedBox(width: 6),
-                  Text(m.label, style: TextStyle(color: m.color, fontWeight: FontWeight.w700, fontSize: 13)),
-                  const Spacer(),
+                  Expanded(
+                    child: Text(m.label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: m.color, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
                   if (delta != null && delta != 0)
                     Text('${delta < 0 ? '↓' : '↑'}${delta.abs().toStringAsFixed(1)}',
                         style: TextStyle(color: m.color.withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.w600)),

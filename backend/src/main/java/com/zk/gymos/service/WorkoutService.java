@@ -51,8 +51,12 @@ public class WorkoutService {
         p.setName(req.name());
         p.setDescription(req.description());
         p.setIcon(req.icon());
-        if (req.totalWeeks() != null) p.setTotalWeeks(req.totalWeeks());
-        if (req.isActive() != null) p.setIsActive(req.isActive());
+        if (req.totalWeeks() != null) {
+            p.setTotalWeeks(req.totalWeeks());
+        }
+        if (req.isActive() != null) {
+            p.setIsActive(req.isActive());
+        }
         return PlanResponse.of(planRepo.save(p));
     }
 
@@ -61,9 +65,15 @@ public class WorkoutService {
         WorkoutPlan p = requirePlan(userId, planId);
         p.setName(req.name());
         p.setDescription(req.description());
-        if (req.icon() != null) p.setIcon(req.icon());
-        if (req.totalWeeks() != null) p.setTotalWeeks(req.totalWeeks());
-        if (req.isActive() != null) p.setIsActive(req.isActive());
+        if (req.icon() != null) {
+            p.setIcon(req.icon());
+        }
+        if (req.totalWeeks() != null) {
+            p.setTotalWeeks(req.totalWeeks());
+        }
+        if (req.isActive() != null) {
+            p.setIsActive(req.isActive());
+        }
         return PlanResponse.of(planRepo.save(p));
     }
 
@@ -115,9 +125,15 @@ public class WorkoutService {
     @Transactional
     public DayResponse updateDay(UUID userId, UUID dayId, DayRequest req) {
         WorkoutDay d = requireDay(userId, dayId);
-        if (req.title() != null) d.setTitle(req.title());
-        if (req.weekNo() != null) d.setWeekNo(req.weekNo());
-        if (req.dayNo() != null) d.setDayNo(req.dayNo());
+        if (req.title() != null) {
+            d.setTitle(req.title());
+        }
+        if (req.weekNo() != null) {
+            d.setWeekNo(req.weekNo());
+        }
+        if (req.dayNo() != null) {
+            d.setDayNo(req.dayNo());
+        }
         return DayResponse.of(dayRepo.save(d));
     }
 
@@ -154,7 +170,9 @@ public class WorkoutService {
         w.setTargetSets(req.targetSets());
         w.setTargetReps(req.targetReps());
         w.setTargetWeight(req.targetWeight());
-        if (req.restSeconds() != null) w.setRestSeconds(req.restSeconds());
+        if (req.restSeconds() != null) {
+            w.setRestSeconds(req.restSeconds());
+        }
         return DayExerciseResponse.of(dayExerciseRepo.save(w), ex);
     }
 
