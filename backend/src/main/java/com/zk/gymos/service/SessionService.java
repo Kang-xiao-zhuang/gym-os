@@ -243,15 +243,24 @@ public class SessionService {
         for (List<WorkoutLog> group : bySession.values()) {
             BigDecimal maxW = null;
             BigDecimal vol = BigDecimal.ZERO;
+            BigDecimal best1rm = null;
             OffsetDateTime date = null;
             for (WorkoutLog l : group) {
                 if (date == null || (l.getCreatedAt() != null && l.getCreatedAt().isBefore(date))) date = l.getCreatedAt();
                 if (l.getWeight() != null) {
                     if (maxW == null || l.getWeight().compareTo(maxW) > 0) maxW = l.getWeight();
-                    if (l.getReps() != null) vol = vol.add(l.getWeight().multiply(BigDecimal.valueOf(l.getReps())));
+                    if (l.getReps() != null) {
+                        vol = vol.add(l.getWeight().multiply(BigDecimal.valueOf(l.getReps())));
+                        // Epley estimated 1RM = w × (1 + reps/30)
+                        BigDecimal e = l.getWeight().multiply(
+                                BigDecimal.ONE.add(BigDecimal.valueOf(l.getReps())
+                                        .divide(BigDecimal.valueOf(30), 4, java.math.RoundingMode.HALF_UP)));
+                        if (best1rm == null || e.compareTo(best1rm) > 0) best1rm = e;
+                    }
                 }
             }
-            points.add(new ExerciseTrendResponse.Point(date, maxW, vol));
+            if (best1rm != null) best1rm = best1rm.setScale(1, java.math.RoundingMode.HALF_UP);
+            points.add(new ExerciseTrendResponse.Point(date, maxW, vol, best1rm));
         }
         // findByUser... is newest-first; reverse to oldest→newest for charting.
         java.util.Collections.reverse(points);

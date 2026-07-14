@@ -8,6 +8,6 @@ import java.util.List;
 public record ExerciseTrendResponse(
         List<Point> points
 ) {
-    /** One session: its date, the top weight that day, and that day's total volume. */
-    public record Point(OffsetDateTime date, BigDecimal maxWeight, BigDecimal volume) {}
+    /** One session: date, top weight that day, total volume, and best estimated 1RM (Epley). */
+    public record Point(OffsetDateTime date, BigDecimal maxWeight, BigDecimal volume, BigDecimal est1rm) {}
 }

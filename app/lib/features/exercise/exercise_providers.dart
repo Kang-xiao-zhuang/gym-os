@@ -20,13 +20,27 @@ final prProvider = FutureProvider.autoDispose.family<PrInfo?, String>((ref, exer
   return PrInfo.fromJson(data);
 });
 
-/// Per-session max-weight trend for an exercise (oldest→newest, weight values).
-final exerciseTrendProvider = FutureProvider.autoDispose.family<List<double>, String>((ref, exerciseId) async {
+/// One session's data point in an exercise's strength curve.
+class TrendPoint {
+  TrendPoint({this.date, this.maxWeight, this.volume, this.est1rm});
+  final DateTime? date;
+  final double? maxWeight;
+  final double? volume;
+  final double? est1rm;
+}
+
+/// Per-session strength curve for an exercise (oldest→newest).
+final exerciseTrendProvider = FutureProvider.autoDispose.family<List<TrendPoint>, String>((ref, exerciseId) async {
   final points = await WorkoutRepository.trend(exerciseId);
-  return points
-      .map((p) => ((p as Map<String, dynamic>)['maxWeight'] as num?)?.toDouble())
-      .whereType<double>()
-      .toList();
+  return points.map((p) {
+    final m = p as Map<String, dynamic>;
+    return TrendPoint(
+      date: m['date'] == null ? null : DateTime.parse(m['date'] as String).toLocal(),
+      maxWeight: (m['maxWeight'] as num?)?.toDouble(),
+      volume: (m['volume'] as num?)?.toDouble(),
+      est1rm: (m['est1rm'] as num?)?.toDouble(),
+    );
+  }).toList();
 });
 
 class PrInfo {

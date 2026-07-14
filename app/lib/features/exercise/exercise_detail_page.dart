@@ -166,26 +166,71 @@ class _PrCard extends ConsumerWidget {
       );
 }
 
-/// Small max-weight trend line for the exercise. Hidden until ≥2 sessions.
-class _TrendCard extends ConsumerWidget {
+enum _Metric { est1rm, maxWeight, volume }
+
+/// Multi-metric strength curve: estimated 1RM / top weight / volume over sessions,
+/// with a headline gain vs the first record. Hidden until ≥2 sessions exist.
+class _TrendCard extends ConsumerStatefulWidget {
   const _TrendCard({required this.exerciseId, required this.color});
 
   final String exerciseId;
   final Color color;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final trend = ref.watch(exerciseTrendProvider(exerciseId));
+  ConsumerState<_TrendCard> createState() => _TrendCardState();
+}
+
+class _TrendCardState extends ConsumerState<_TrendCard> {
+  _Metric? _picked;
+
+  static const Map<_Metric, ({String label, String unit})> _meta = {
+    _Metric.est1rm: (label: '估算1RM', unit: 'kg'),
+    _Metric.maxWeight: (label: '最大重量', unit: 'kg'),
+    _Metric.volume: (label: '训练容量', unit: 'kg'),
+  };
+
+  double? _value(_Metric m, TrendPoint p) => switch (m) {
+        _Metric.est1rm => p.est1rm,
+        _Metric.maxWeight => p.maxWeight,
+        _Metric.volume => p.volume,
+      };
+
+  List<(DateTime?, double)> _series(_Metric m, List<TrendPoint> pts) {
+    final out = <(DateTime?, double)>[];
+    for (final p in pts) {
+      final v = _value(m, p);
+      if (v != null && (m != _Metric.volume || v > 0)) out.add((p.date, v));
+    }
+    return out;
+  }
+
+  static String _fmt(double v) => v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color;
+    final trend = ref.watch(exerciseTrendProvider(widget.exerciseId));
     return trend.maybeWhen(
-      data: (weights) {
-        if (weights.length < 2) return const SizedBox.shrink();
-        final spots = [for (var i = 0; i < weights.length; i++) FlSpot(i.toDouble(), weights[i])];
-        final minY = weights.reduce((a, b) => a < b ? a : b) - 2;
-        final maxY = weights.reduce((a, b) => a > b ? a : b) + 2;
+      data: (points) {
+        final available = _Metric.values.where((m) => _series(m, points).length >= 2).toList();
+        if (available.isEmpty) return const SizedBox.shrink();
+        final metric = (_picked != null && available.contains(_picked)) ? _picked! : available.first;
+        final series = _series(metric, points);
+        final unit = _meta[metric]!.unit;
+
+        final values = series.map((e) => e.$2).toList();
+        final first = values.first, last = values.last;
+        final delta = last - first;
+        final minV = values.reduce((a, b) => a < b ? a : b);
+        final maxV = values.reduce((a, b) => a > b ? a : b);
+        final pad = ((maxV - minV) * 0.15).clamp(1.0, 1e9);
+        final spots = [for (var i = 0; i < values.length; i++) FlSpot(i.toDouble(), values[i])];
+        final labelStep = (series.length / 4).ceil().clamp(1, 9999);
+
         return Padding(
           padding: const EdgeInsets.only(top: 16),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(12, 14, 14, 10),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(AppTheme.radius),
@@ -193,23 +238,75 @@ class _TrendCard extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.only(left: 8, bottom: 8),
-                  child: Text('📈 最大重量趋势', style: TextStyle(fontWeight: FontWeight.w700)),
+                const Text('📈 力量曲线', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                if (available.length > 1)
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<_Metric>(
+                      segments: [
+                        for (final m in available)
+                          ButtonSegment(value: m, label: Text(_meta[m]!.label, style: const TextStyle(fontSize: 12))),
+                      ],
+                      selected: {metric},
+                      showSelectedIcon: false,
+                      style: ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onSelectionChanged: (s) => setState(() => _picked = s.first),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text('${_fmt(last)} $unit',
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                    const SizedBox(width: 8),
+                    Text(
+                      delta >= 0 ? '较首次 +${_fmt(delta)}' : '较首次 ${_fmt(delta)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: delta >= 0 ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 12),
                 SizedBox(
-                  height: 140,
+                  height: 150,
                   child: LineChart(
                     LineChartData(
-                      minY: minY,
-                      maxY: maxY,
-                      gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: ((maxY - minY) / 3).clamp(0.5, 1e6)),
+                      minY: minV - pad,
+                      maxY: maxV + pad,
+                      gridData: FlGridData(
+                          show: true, drawVerticalLine: false, horizontalInterval: ((maxV - minV + 2 * pad) / 3).clamp(0.5, 1e9)),
                       borderData: FlBorderData(show: false),
-                      titlesData: const FlTitlesData(
-                        topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 34)),
+                      titlesData: FlTitlesData(
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 38)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 22,
+                            interval: 1,
+                            getTitlesWidget: (x, meta) {
+                              final i = x.toInt();
+                              if (i < 0 || i >= series.length) return const SizedBox.shrink();
+                              if (i % labelStep != 0 && i != series.length - 1) return const SizedBox.shrink();
+                              final d = series[i].$1;
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(d == null ? '' : '${d.month}/${d.day}',
+                                    style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
+                              );
+                            },
+                          ),
+                        ),
                       ),
                       lineTouchData: const LineTouchData(enabled: true),
                       lineBarsData: [
