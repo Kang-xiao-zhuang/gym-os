@@ -124,13 +124,22 @@ public class SessionService {
         return new LastPerformanceResponse(logs.getFirst().getCreatedAt(), sets);
     }
 
-    /** Personal record for an exercise (null if never logged with weight). */
+    /**
+     * Personal record for an exercise. Null only if the exercise has never been logged at all.
+     * Weighted moves report maxWeight/bestSetVolume; bodyweight moves report {@code bestReps} =
+     * the most TOTAL reps done for this exercise in a single training session (sum across its
+     * sets), so progress is measured by session volume, not a single-set max.
+     */
     @Transactional(readOnly = true)
     public PrResponse personalRecord(UUID userId, UUID exerciseId) {
         List<WorkoutLog> logs = logRepo.findByUserAndExerciseNewestFirst(userId, exerciseId);
-        WorkoutLog maxW = null;      // heaviest weight
+        WorkoutLog maxW = null;      // heaviest weight (single set)
         WorkoutLog bestVol = null;   // best single-set volume (weight×reps)
+        Map<UUID, Integer> repsPerSession = new LinkedHashMap<>();  // sessionId → total reps of this exercise
         for (WorkoutLog l : logs) {
+            if (l.getReps() != null) {
+                repsPerSession.merge(l.getSessionId(), l.getReps(), Integer::sum);
+            }
             if (l.getWeight() == null) continue;
             if (maxW == null || l.getWeight().compareTo(maxW.getWeight()) > 0) maxW = l;
             if (l.getReps() != null) {
@@ -140,11 +149,31 @@ public class SessionService {
                 if (bestVol == null || bestVolVal == null || vol.compareTo(bestVolVal) > 0) bestVol = l;
             }
         }
-        if (maxW == null) return null;
+        Integer bestReps = null;         // most total reps in one session
+        UUID bestRepsSession = null;
+        for (Map.Entry<UUID, Integer> en : repsPerSession.entrySet()) {
+            if (bestReps == null || en.getValue() > bestReps) {
+                bestReps = en.getValue();
+                bestRepsSession = en.getKey();
+            }
+        }
+        if (maxW == null && bestReps == null) return null;
+
+        OffsetDateTime achievedAt = maxW != null ? maxW.getCreatedAt() : null;
+        if (achievedAt == null && bestRepsSession != null) {
+            for (WorkoutLog l : logs) {
+                if (bestRepsSession.equals(l.getSessionId()) && l.getCreatedAt() != null
+                        && (achievedAt == null || l.getCreatedAt().isBefore(achievedAt))) {
+                    achievedAt = l.getCreatedAt();
+                }
+            }
+        }
         return new PrResponse(
-                maxW.getWeight(), maxW.getReps(),
+                maxW == null ? null : maxW.getWeight(),
+                maxW == null ? null : maxW.getReps(),
                 bestVol == null ? null : bestVol.getWeight().multiply(BigDecimal.valueOf(bestVol.getReps())),
-                maxW.getCreatedAt());
+                bestReps,
+                achievedAt);
     }
 
     /** Per-session trend of one exercise (oldest→newest): max weight + volume each session. */

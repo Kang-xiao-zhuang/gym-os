@@ -12,6 +12,7 @@ public record DayExerciseResponse(
         UUID exerciseId,
         String exerciseName,
         String bodyPart,
+        String equipment,
         String imageUrl,
         Integer sortOrder,
         Integer targetSets,
@@ -24,6 +25,7 @@ public record DayExerciseResponse(
                 w.getId(), w.getExerciseId(),
                 e == null ? "(已删除动作)" : e.getName(),
                 e == null ? null : e.getBodyPart(),
+                e == null ? null : e.getEquipment(),
                 e == null ? null : e.getImageUrl(),
                 w.getSortOrder(), w.getTargetSets(), w.getTargetReps(),
                 w.getTargetWeight(), w.getRestSeconds());

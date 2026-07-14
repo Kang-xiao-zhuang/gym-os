@@ -51,6 +51,7 @@ class DayExercise {
     required this.exerciseId,
     required this.exerciseName,
     this.bodyPart,
+    this.equipment,
     this.imageUrl,
     this.targetSets,
     this.targetReps,
@@ -62,17 +63,23 @@ class DayExercise {
   final String exerciseId;
   final String exerciseName;
   final String? bodyPart;
+  final String? equipment;
   final String? imageUrl;
   final int? targetSets;
   final int? targetReps;
   final double? targetWeight;
   final int? restSeconds;
 
+  /// Bodyweight moves (自重) carry no external load, so the UI logs reps only —
+  /// no kg field — and volume falls back to total reps.
+  bool get isBodyweight => equipment == '自重';
+
   factory DayExercise.fromJson(Map<String, dynamic> j) => DayExercise(
         id: j['id'] as String,
         exerciseId: j['exerciseId'] as String,
         exerciseName: j['exerciseName'] as String? ?? '(动作)',
         bodyPart: j['bodyPart'] as String?,
+        equipment: j['equipment'] as String?,
         imageUrl: j['imageUrl'] as String?,
         targetSets: (j['targetSets'] as num?)?.toInt(),
         targetReps: (j['targetReps'] as num?)?.toInt(),

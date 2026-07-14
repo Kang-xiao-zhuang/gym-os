@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:confetti/confetti.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/body_part.dart';
@@ -373,6 +374,19 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
     return v;
   }
 
+  /// Total reps across every set with a reps value — the meaningful headline
+  /// for bodyweight days where volume (weight×reps) is 0.
+  int _totalReps(List<DayExercise> items) {
+    var n = 0;
+    for (final e in items) {
+      for (final r in _rows[e.id] ?? const <_SetRow>[]) {
+        final reps = int.tryParse(r.reps.text);
+        if (reps != null) n += reps;
+      }
+    }
+    return n;
+  }
+
   ({int total, int done}) _counts(List<DayExercise> items) {
     var total = 0, done = 0;
     for (final e in items) {
@@ -386,15 +400,27 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
 
   Future<void> _finish(List<DayExercise> items) async {
     final logs = <Map<String, dynamic>>[];
+    final bestW = <String, double>{};       // exerciseId → heaviest completed weight today
+    final bestWReps = <String, int>{};       // reps at that heaviest weight
+    final sumReps = <String, int>{};         // total reps this session (for bodyweight PRs)
     for (final e in items) {
       for (final r in _rows[e.id] ?? const <_SetRow>[]) {
         if (!r.done) continue;
+        final w = double.tryParse(r.weight.text);
+        final reps = int.tryParse(r.reps.text);
         logs.add({
           'exerciseId': e.exerciseId,
           'setNo': r.no,
-          'weight': double.tryParse(r.weight.text),
-          'reps': int.tryParse(r.reps.text),
+          'weight': w,
+          'reps': reps,
         });
+        if (w != null && (bestW[e.exerciseId] == null || w > bestW[e.exerciseId]!)) {
+          bestW[e.exerciseId] = w;
+          bestWReps[e.exerciseId] = reps ?? 0;
+        }
+        if (reps != null) {
+          sumReps[e.exerciseId] = (sumReps[e.exerciseId] ?? 0) + reps;
+        }
       }
     }
     if (logs.isEmpty) {
@@ -403,6 +429,47 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
     }
     final minutes = _elapsed.inMinutes;
     final vol = _volume(items);
+    final totalReps = logs.fold<int>(0, (s, l) => s + ((l['reps'] as int?) ?? 0));
+
+    // Detect personal records BEFORE saving this session, so the PR query
+    // reflects history up to *before* today. A heavier top set than the old
+    // record (or a first-ever weighted lift) counts as a new PR.
+    String fmtW(double v) => v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+    final prs = <PrHit>[];
+    for (final e in items) {
+      try {
+        final prev = await WorkoutRepository.personalRecord(e.exerciseId);
+        if (e.isBodyweight) {
+          // Bodyweight → record is the most TOTAL reps in a single session.
+          final todayReps = sumReps[e.exerciseId];
+          if (todayReps == null) continue;
+          final prevReps = (prev?['bestReps'] as num?)?.toInt();
+          if (prevReps == null || todayReps > prevReps) {
+            prs.add(PrHit(
+              name: e.exerciseName,
+              emoji: bodyPartStyle(e.bodyPart ?? '').emoji,
+              valueText: '$todayReps 次',
+              prevText: prevReps == null ? null : '$prevReps 次',
+            ));
+          }
+        } else {
+          // Weighted → record is heaviest top set.
+          final w = bestW[e.exerciseId];
+          if (w == null) continue;
+          final prevMax = (prev?['maxWeight'] as num?)?.toDouble();
+          if (prevMax == null || w > prevMax) {
+            final reps = bestWReps[e.exerciseId] ?? 0;
+            prs.add(PrHit(
+              name: e.exerciseName,
+              emoji: bodyPartStyle(e.bodyPart ?? '').emoji,
+              valueText: reps > 0 ? '${fmtW(w)}kg × $reps' : '${fmtW(w)}kg',
+              prevText: prevMax == null ? null : '${fmtW(prevMax)}kg',
+            ));
+          }
+        }
+      } catch (_) {/* PR is a nice-to-have; a fetch failure must not block finishing */}
+    }
+
     try {
       await WorkoutRepository.finishSession(
         dayId: widget.dayId,
@@ -413,26 +480,10 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
       ref.invalidate(sessionsProvider);
       for (final e in items) {
         ref.invalidate(lastPerformanceProvider(e.exerciseId));
+        ref.invalidate(prProvider(e.exerciseId));
       }
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('训练完成 🎉'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('⏱ 用时 $minutes 分钟'),
-              const SizedBox(height: 6),
-              Text('✅ 完成 ${logs.length} 组'),
-              const SizedBox(height: 6),
-              Text('🏋️ 总容量 ${vol.toStringAsFixed(0)} kg'),
-            ],
-          ),
-          actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('好的'))],
-        ),
-      );
+      await showCelebration(context, minutes: minutes, sets: logs.length, volume: vol, reps: totalReps, prs: prs);
       await DoneTodayStore.setDone(widget.dayId, true);
       await ProgressStore.clear(widget.dayId);
       if (mounted) {
@@ -524,7 +575,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
                 Text('训练中 $_elapsedText',
                     style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5, fontWeight: FontWeight.w600)),
                 const Spacer(),
-                Text('🏋️ ${vol.toStringAsFixed(0)} kg',
+                Text(vol > 0 ? '🏋️ ${vol.toStringAsFixed(0)} kg' : '💪 ${_totalReps(items)} 次',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 12.5, fontWeight: FontWeight.w700)),
               ],
             ),
@@ -631,7 +682,18 @@ class _ExerciseSets extends ConsumerWidget {
       if (exercise.targetSets != null && exercise.targetReps != null)
         '目标 ${exercise.targetSets}×${exercise.targetReps}',
     ].join();
-    final last = ref.watch(lastPerformanceProvider(exercise.exerciseId));
+    final lastTxt = ref.watch(lastPerformanceProvider(exercise.exerciseId)).value;
+    final pr = ref.watch(prProvider(exercise.exerciseId)).value;
+    String? prTxt;
+    if (pr != null) {
+      if (exercise.isBodyweight) {
+        if (pr.bestReps != null) prTxt = '${pr.bestReps} 次';
+      } else if (pr.maxWeight != null) {
+        final w = pr.maxWeight!;
+        final wt = w % 1 == 0 ? w.toStringAsFixed(0) : w.toStringAsFixed(1);
+        prTxt = pr.maxWeightReps != null ? '${wt}kg×${pr.maxWeightReps}' : '${wt}kg';
+      }
+    }
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -658,16 +720,23 @@ class _ExerciseSets extends ConsumerWidget {
                 ),
               ],
             ),
-            last.maybeWhen(
-              data: (txt) => txt == null
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      padding: const EdgeInsets.only(top: 2, left: 28),
-                      child: Text('上次 $txt',
+            if (lastTxt != null || prTxt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 3, left: 28),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 2,
+                  children: [
+                    if (lastTxt != null)
+                      Text('上次 $lastTxt',
                           style: TextStyle(fontSize: 12, color: s.color, fontWeight: FontWeight.w500)),
-                    ),
-              orElse: () => const SizedBox.shrink(),
-            ),
+                    if (prTxt != null)
+                      Text('🏆 纪录 $prTxt',
+                          style: const TextStyle(
+                              fontSize: 12, color: Color(0xFFF59E0B), fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
             const SizedBox(height: 4),
             ...rows.map((r) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
@@ -677,9 +746,14 @@ class _ExerciseSets extends ConsumerWidget {
                         width: 44,
                         child: Text('第${r.no}组', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                       ),
-                      numField(r.weight, 'kg'),
-                      const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('×')),
-                      numField(r.reps, '次'),
+                      if (exercise.isBodyweight) ...[
+                        numField(r.reps, '次'),
+                        const Padding(padding: EdgeInsets.only(left: 6), child: Text('次')),
+                      ] else ...[
+                        numField(r.weight, 'kg'),
+                        const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('×')),
+                        numField(r.reps, '次'),
+                      ],
                       const Spacer(),
                       IconButton(
                         visualDensity: VisualDensity.compact,
@@ -736,6 +810,307 @@ class _Hero extends StatelessWidget {
         ],
       ),
       child: child,
+    );
+  }
+}
+
+
+/// Today's focus card: gradient tinted by the day's main body part, big day
+/// title + exercise count. The visual anchor of the home tab.
+class _FocusHero extends ConsumerWidget {
+  const _FocusHero({required this.plan, required this.day, required this.dayId, required this.onChangePlan});
+
+  final Plan plan;
+  final Day? day;
+  final String? dayId;
+  final VoidCallback onChangePlan;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    var color = const Color(0xFF6366F1);
+    var emoji = '🏋️';
+    var subtitle = '今天，练起来';
+    if (dayId != null) {
+      final exs = ref.watch(dayExercisesProvider(dayId!)).value;
+      if (exs != null && exs.isNotEmpty) {
+        final counts = <String, int>{};
+        for (final e in exs) {
+          final bp = e.bodyPart ?? '';
+          counts[bp] = (counts[bp] ?? 0) + 1;
+        }
+        final top = counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+        final s = bodyPartStyle(top);
+        color = s.color;
+        emoji = s.emoji;
+        subtitle = '${exs.length} 个动作${top.isEmpty ? '' : ' · 主练 $top'}';
+      }
+    }
+    final title = (day?.label != null && day!.label.isNotEmpty) ? day!.label : plan.name;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [color, Color.lerp(color, Colors.black, 0.28)!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(plan.displayIcon, style: const TextStyle(fontSize: 13)),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(plan.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                    TextButton(
+                      onPressed: onChangePlan,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('更换', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(emoji, style: const TextStyle(fontSize: 46)),
+        ],
+      ),
+    );
+  }
+}
+
+/// A personal record broken in a single workout — either heaviest weight
+/// (weighted moves) or most reps in a set (bodyweight moves), pre-formatted.
+class PrHit {
+  PrHit({required this.name, required this.emoji, required this.valueText, this.prevText});
+  final String name;
+  final String emoji;
+  final String valueText; // 今天的成绩，如 "65kg × 5" 或 "15 次"
+  final String? prevText; // 旧纪录，如 "92.5kg" 或 "12 次"；null = 首个纪录
+
+  bool get isFirst => prevText == null;
+}
+
+/// Full-screen celebration shown after finishing a workout: confetti + big
+/// title + this-session stats, plus a 🏆 callout for any personal records.
+Future<void> showCelebration(BuildContext context,
+    {required int minutes, required int sets, required double volume, required int reps, List<PrHit> prs = const []}) {
+  return showGeneralDialog(
+    context: context,
+    barrierDismissible: false,
+    barrierColor: Colors.black54,
+    transitionDuration: const Duration(milliseconds: 250),
+    pageBuilder: (_, _, _) => _CelebrationView(minutes: minutes, sets: sets, volume: volume, reps: reps, prs: prs),
+    transitionBuilder: (_, anim, _, child) =>
+        FadeTransition(opacity: anim, child: ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(anim), child: child)),
+  );
+}
+
+class _CelebrationView extends StatefulWidget {
+  const _CelebrationView(
+      {required this.minutes, required this.sets, required this.volume, required this.reps, this.prs = const []});
+  final int minutes;
+  final int sets;
+  final double volume;
+  final int reps;
+  final List<PrHit> prs;
+
+  @override
+  State<_CelebrationView> createState() => _CelebrationViewState();
+}
+
+class _CelebrationViewState extends State<_CelebrationView> {
+  late final ConfettiController _confetti;
+
+  @override
+  void initState() {
+    super.initState();
+    _confetti = ConfettiController(duration: const Duration(seconds: 2));
+    _confetti.play();
+  }
+
+  @override
+  void dispose() {
+    _confetti.dispose();
+    super.dispose();
+  }
+
+  bool get _hasPr => widget.prs.isNotEmpty;
+
+  String get _cheer => _hasPr
+      ? '刷新了 ${widget.prs.length} 项纪录，就是这股劲 🔥'
+      : widget.volume >= 3000
+          ? '今天很猛，就是这个劲头 🔥'
+          : widget.sets >= 12
+              ? '扎实的一练，干得漂亮 💪'
+              : '完成就是胜利，继续保持 👏';
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = _hasPr
+        ? const [Color(0xFFF59E0B), Color(0xFFEA580C)] // 破纪录 → 金橙
+        : const [Color(0xFF6366F1), Color(0xFF8B5CF6)];
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  colors: gradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 30, offset: const Offset(0, 12))],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_hasPr ? '🏆' : '🎉', style: const TextStyle(fontSize: 56)),
+                  const SizedBox(height: 8),
+                  Text(_hasPr ? '打破纪录！' : '训练完成！',
+                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _stat('${widget.minutes}', '分钟'),
+                      _stat('${widget.sets}', '组'),
+                      widget.volume > 0
+                          ? _stat(widget.volume.toStringAsFixed(0), 'kg')
+                          : _stat('${widget.reps}', '次'),
+                    ],
+                  ),
+                  if (_hasPr) ...[
+                    const SizedBox(height: 18),
+                    _PrList(prs: widget.prs),
+                  ],
+                  const SizedBox(height: 18),
+                  Text(_cheer, style: const TextStyle(color: Colors.white70, fontSize: 13.5)),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: _hasPr ? const Color(0xFFEA580C) : const Color(0xFF6366F1),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('完成'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          ConfettiWidget(
+            confettiController: _confetti,
+            blastDirectionality: BlastDirectionality.explosive,
+            emissionFrequency: _hasPr ? 0.08 : 0.05,
+            numberOfParticles: _hasPr ? 32 : 20,
+            gravity: 0.25,
+            shouldLoop: false,
+            colors: _hasPr
+                ? const [Color(0xFFFFD700), Color(0xFFF59E0B), Color(0xFFFFF3C4), Color(0xFFEA580C), Colors.white]
+                : const [
+                    Color(0xFF6366F1),
+                    Color(0xFFF59E0B),
+                    Color(0xFF14B8A6),
+                    Color(0xFFEF4444),
+                    Color(0xFFEC4899),
+                  ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(String value, String label) => Column(
+        children: [
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        ],
+      );
+}
+
+/// The list of personal records broken this session, shown inside the
+/// celebration on a translucent panel.
+class _PrList extends StatelessWidget {
+  const _PrList({required this.prs});
+
+  final List<PrHit> prs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final pr in prs)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Text(pr.emoji, style: const TextStyle(fontSize: 18)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(pr.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(pr.valueText,
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                      Text(
+                        pr.isFirst ? '首个纪录' : '↑ 原 ${pr.prevText}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

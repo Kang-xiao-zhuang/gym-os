@@ -31,7 +31,27 @@ final lastPerformanceProvider = FutureProvider.autoDispose.family<String?, Strin
     final w = m['weight'] as num?;
     final reps = m['reps'] as num?;
     if (w != null && reps != null) return '${fmt(w)}×$reps';
-    if (reps != null) return '×$reps';
+    if (reps != null) return '$reps 次';
     return '';
   }).where((s) => s.isNotEmpty).join(' · ');
+});
+
+/// Personal-record snapshot for an exercise: heaviest weight (+ reps at it) for
+/// weighted moves, and most reps in a single set for bodyweight moves.
+class PrInfo {
+  PrInfo({this.maxWeight, this.maxWeightReps, this.bestReps});
+  final double? maxWeight;
+  final int? maxWeightReps;
+  final int? bestReps;
+}
+
+/// Personal record for an exercise; null if it has never been logged.
+final prProvider = FutureProvider.autoDispose.family<PrInfo?, String>((ref, exerciseId) async {
+  final data = await WorkoutRepository.personalRecord(exerciseId);
+  if (data == null) return null;
+  return PrInfo(
+    maxWeight: (data['maxWeight'] as num?)?.toDouble(),
+    maxWeightReps: (data['maxWeightReps'] as num?)?.toInt(),
+    bestReps: (data['bestReps'] as num?)?.toInt(),
+  );
 });
