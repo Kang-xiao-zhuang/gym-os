@@ -12,3 +12,8 @@ final sessionDetailProvider = FutureProvider.autoDispose.family<SessionDetail, S
   final data = await ApiClient.get('/api/sessions/$id') as Map<String, dynamic>;
   return SessionDetail.fromJson(data);
 });
+
+final insightsProvider = FutureProvider.autoDispose<Insights>((ref) async {
+  final data = await ApiClient.get('/api/sessions/insights') as Map<String, dynamic>;
+  return Insights.fromJson(data);
+});

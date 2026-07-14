@@ -42,6 +42,61 @@ class WorkoutSessionSummary {
   DateTime get when => finishedAt ?? createdAt;
 }
 
+/// Coaching insights (mirrors backend InsightsResponse).
+class Insights {
+  Insights({required this.bodyParts, required this.plateaus, this.biggestGain});
+
+  final List<BodyPartLoad> bodyParts;
+  final List<Plateau> plateaus;
+  final Gain? biggestGain;
+
+  bool get isEmpty => bodyParts.isEmpty && plateaus.isEmpty && biggestGain == null;
+
+  factory Insights.fromJson(Map<String, dynamic> j) => Insights(
+        bodyParts: (j['bodyParts'] as List<dynamic>? ?? [])
+            .map((e) => BodyPartLoad.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        plateaus: (j['plateaus'] as List<dynamic>? ?? [])
+            .map((e) => Plateau.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        biggestGain: j['biggestGain'] == null ? null : Gain.fromJson(j['biggestGain'] as Map<String, dynamic>),
+      );
+}
+
+class BodyPartLoad {
+  BodyPartLoad({required this.bodyPart, required this.sets});
+  final String bodyPart;
+  final int sets;
+  factory BodyPartLoad.fromJson(Map<String, dynamic> j) =>
+      BodyPartLoad(bodyPart: j['bodyPart'] as String? ?? '其他', sets: (j['sets'] as num?)?.toInt() ?? 0);
+}
+
+class Plateau {
+  Plateau({required this.exerciseName, required this.weight, required this.sessions});
+  final String exerciseName;
+  final double weight;
+  final int sessions;
+  factory Plateau.fromJson(Map<String, dynamic> j) => Plateau(
+        exerciseName: j['exerciseName'] as String? ?? '动作',
+        weight: (j['weight'] as num?)?.toDouble() ?? 0,
+        sessions: (j['sessions'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class Gain {
+  Gain({required this.exerciseName, required this.fromWeight, required this.toWeight, required this.delta});
+  final String exerciseName;
+  final double fromWeight;
+  final double toWeight;
+  final double delta;
+  factory Gain.fromJson(Map<String, dynamic> j) => Gain(
+        exerciseName: j['exerciseName'] as String? ?? '动作',
+        fromWeight: (j['fromWeight'] as num?)?.toDouble() ?? 0,
+        toWeight: (j['toWeight'] as num?)?.toDouble() ?? 0,
+        delta: (j['delta'] as num?)?.toDouble() ?? 0,
+      );
+}
+
 class SetLog {
   SetLog({this.setNo, this.weight, this.reps});
   final int? setNo;

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/body_part.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../history/session_models.dart';
 import '../history/session_providers.dart';
 import 'stats_util.dart';
 
@@ -61,7 +63,9 @@ class _StatsPageState extends ConsumerState<StatsPage> {
                     _Stat(label: '累计打卡', value: '${days.length}', unit: '天', color: const Color(0xFF14B8A6)),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                const _InsightCards(),
+                const SizedBox(height: 4),
                 _YearHeatmap(year: _year, loads: loads, now: now, trainedInYear: yearCount(days, _year), onShiftYear: _shiftYear),
               ],
             ),
@@ -107,6 +111,177 @@ class _Stat extends StatelessWidget {
     );
   }
 }
+
+String _fmtKg(double v) => v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+/// "复盘" — actionable coaching cards derived from the whole history:
+/// biggest recent gain, this-month body-part balance, possible plateaus.
+class _InsightCards extends ConsumerWidget {
+  const _InsightCards();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(insightsProvider);
+    final ins = async.value;
+    if (ins == null || ins.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 2, bottom: 8),
+          child: Text('复盘', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        ),
+        if (ins.biggestGain != null) ...[
+          _GainCard(gain: ins.biggestGain!),
+          const SizedBox(height: 10),
+        ],
+        if (ins.bodyParts.isNotEmpty) ...[
+          _BalanceCard(parts: ins.bodyParts),
+          const SizedBox(height: 10),
+        ],
+        if (ins.plateaus.isNotEmpty) ...[
+          _PlateauCard(plateaus: ins.plateaus),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _GainCard extends StatelessWidget {
+  const _GainCard({required this.gain});
+  final Gain gain;
+
+  @override
+  Widget build(BuildContext context) {
+    const green = Color(0xFF16A34A);
+    return _insightBox(
+      color: green,
+      child: Row(
+        children: [
+          const Text('📈', style: TextStyle(fontSize: 26)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('本月进步最大', style: TextStyle(fontSize: 12, color: green, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text('${gain.exerciseName}  ${_fmtKg(gain.fromWeight)} → ${_fmtKg(gain.toWeight)} kg',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(color: green.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+            child: Text('+${_fmtKg(gain.delta)}kg',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: green)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BalanceCard extends StatelessWidget {
+  const _BalanceCard({required this.parts});
+  final List<BodyPartLoad> parts;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxSets = parts.map((p) => p.sets).fold<int>(1, (a, b) => b > a ? b : a);
+    final lowest = parts.reduce((a, b) => a.sets <= b.sets ? a : b);
+    final scheme = Theme.of(context).colorScheme;
+    return _insightBox(
+      color: const Color(0xFF6366F1),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Text('🧭 ', style: TextStyle(fontSize: 14)),
+            Text('本月部位分布', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+          ]),
+          const SizedBox(height: 10),
+          ...parts.map((p) {
+            final st = bodyPartStyle(p.bodyPart);
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  SizedBox(width: 22, child: Text(st.emoji, style: const TextStyle(fontSize: 15))),
+                  SizedBox(width: 34, child: Text(p.bodyPart, style: const TextStyle(fontSize: 12.5))),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: p.sets / maxSets,
+                        minHeight: 8,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        color: st.color,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('${p.sets} 组', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 6),
+          Text('💡 ${lowest.bodyPart}练得最少（${lowest.sets} 组），别落下',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlateauCard extends StatelessWidget {
+  const _PlateauCard({required this.plateaus});
+  final List<Plateau> plateaus;
+
+  @override
+  Widget build(BuildContext context) {
+    const amber = Color(0xFFF59E0B);
+    return _insightBox(
+      color: amber,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Text('⚠️ ', style: TextStyle(fontSize: 14)),
+            Text('可能停滞', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFFB45309))),
+          ]),
+          const SizedBox(height: 6),
+          ...plateaus.map((p) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text('${p.exerciseName} · 近 ${p.sessions} 次停在 ${_fmtKg(p.weight)}kg，该冲一把或换变式',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5)),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+Widget _insightBox({required Color color, required Widget child}) => Builder(
+      builder: (context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppTheme.radius),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: child,
+      ),
+    );
 
 /// GitHub-style yearly check-in heatmap: 7 rows (Mon→Sun) × ~53 week columns,
 /// each cell shaded by that day's training load (total sets).

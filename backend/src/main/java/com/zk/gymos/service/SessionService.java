@@ -3,6 +3,7 @@ package com.zk.gymos.service;
 import com.zk.gymos.common.BusinessException;
 import com.zk.gymos.common.ResultCode;
 import com.zk.gymos.dto.ExerciseTrendResponse;
+import com.zk.gymos.dto.InsightsResponse;
 import com.zk.gymos.dto.LastPerformanceResponse;
 import com.zk.gymos.dto.PrResponse;
 import com.zk.gymos.dto.SessionDetailResponse;
@@ -255,6 +256,89 @@ public class SessionService {
         // findByUser... is newest-first; reverse to oldest→newest for charting.
         java.util.Collections.reverse(points);
         return new ExerciseTrendResponse(points);
+    }
+
+    /** Coaching insights: this-month body-part balance, plateaus, biggest recent gain. */
+    @Transactional(readOnly = true)
+    public InsightsResponse insights(UUID userId) {
+        List<WorkoutSession> sessions = sessionRepo.findByUserIdOrderByCreatedAtDesc(userId);
+        if (sessions.isEmpty()) return new InsightsResponse(List.of(), List.of(), null);
+
+        Map<UUID, List<WorkoutLog>> logsBySession = new HashMap<>();
+        Set<UUID> exIds = new HashSet<>();
+        for (WorkoutSession s : sessions) {
+            List<WorkoutLog> ls = logRepo.findBySessionId(s.getId());
+            logsBySession.put(s.getId(), ls);
+            for (WorkoutLog l : ls) exIds.add(l.getExerciseId());
+        }
+        Map<UUID, Exercise> exById = exerciseRepo.findAllById(exIds).stream()
+                .collect(Collectors.toMap(Exercise::getId, Function.identity()));
+
+        // Per-exercise chronological points (oldest→newest).
+        record ExPoint(OffsetDateTime date, BigDecimal maxW, int sets) {}
+        List<WorkoutSession> chrono = new ArrayList<>(sessions);
+        java.util.Collections.reverse(chrono);
+        OffsetDateTime now = OffsetDateTime.now();
+
+        Map<UUID, List<ExPoint>> byEx = new LinkedHashMap<>();
+        Map<String, Integer> partSetsThisMonth = new LinkedHashMap<>();
+        for (WorkoutSession s : chrono) {
+            OffsetDateTime date = s.getCreatedAt();
+            Map<UUID, BigDecimal> sMaxW = new HashMap<>();
+            Map<UUID, Integer> sSets = new HashMap<>();
+            for (WorkoutLog l : logsBySession.get(s.getId())) {
+                sSets.merge(l.getExerciseId(), 1, Integer::sum);
+                if (l.getWeight() != null) {
+                    sMaxW.merge(l.getExerciseId(), l.getWeight(), (a, b) -> b.compareTo(a) > 0 ? b : a);
+                }
+            }
+            boolean thisMonth = date != null && date.getYear() == now.getYear() && date.getMonthValue() == now.getMonthValue();
+            for (UUID ex : sSets.keySet()) {
+                byEx.computeIfAbsent(ex, k -> new ArrayList<>())
+                        .add(new ExPoint(date, sMaxW.get(ex), sSets.get(ex)));
+                if (thisMonth) {
+                    Exercise e = exById.get(ex);
+                    String bp = (e == null || e.getBodyPart() == null) ? "其他" : e.getBodyPart();
+                    partSetsThisMonth.merge(bp, sSets.get(ex), Integer::sum);
+                }
+            }
+        }
+
+        List<InsightsResponse.BodyPartLoad> bodyParts = partSetsThisMonth.entrySet().stream()
+                .sorted((a, b) -> b.getValue() - a.getValue())
+                .map(en -> new InsightsResponse.BodyPartLoad(en.getKey(), en.getValue()))
+                .toList();
+
+        // Plateaus: weighted exercises whose top weight didn't improve across the last ≤4 sessions.
+        List<InsightsResponse.Plateau> plateaus = new ArrayList<>();
+        OffsetDateTime cutoff = now.minusDays(30);
+        InsightsResponse.Gain bestGain = null;
+        for (Map.Entry<UUID, List<ExPoint>> en : byEx.entrySet()) {
+            Exercise e = exById.get(en.getKey());
+            if (e == null || "自重".equals(e.getEquipment())) continue;
+            List<ExPoint> weighted = en.getValue().stream().filter(p -> p.maxW() != null).toList();
+
+            if (weighted.size() >= 3) {
+                List<ExPoint> window = weighted.subList(Math.max(0, weighted.size() - 4), weighted.size());
+                if (window.get(window.size() - 1).maxW().compareTo(window.get(0).maxW()) <= 0) {
+                    plateaus.add(new InsightsResponse.Plateau(e.getName(), window.get(window.size() - 1).maxW(), window.size()));
+                }
+            }
+
+            List<ExPoint> recent = weighted.stream().filter(p -> p.date() != null && p.date().isAfter(cutoff)).toList();
+            if (recent.size() >= 2) {
+                BigDecimal from = recent.get(0).maxW();
+                BigDecimal to = recent.get(recent.size() - 1).maxW();
+                BigDecimal delta = to.subtract(from);
+                if (delta.signum() > 0 && (bestGain == null || delta.compareTo(bestGain.delta()) > 0)) {
+                    bestGain = new InsightsResponse.Gain(e.getName(), from, to, delta);
+                }
+            }
+        }
+        plateaus.sort((a, b) -> b.sessions() - a.sessions());
+        if (plateaus.size() > 3) plateaus = plateaus.subList(0, 3);
+
+        return new InsightsResponse(bodyParts, plateaus, bestGain);
     }
 
     @Transactional

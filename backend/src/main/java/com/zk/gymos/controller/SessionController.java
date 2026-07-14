@@ -3,6 +3,7 @@ package com.zk.gymos.controller;
 import com.zk.gymos.common.Result;
 import com.zk.gymos.common.Results;
 import com.zk.gymos.dto.ExerciseTrendResponse;
+import com.zk.gymos.dto.InsightsResponse;
 import com.zk.gymos.dto.LastPerformanceResponse;
 import com.zk.gymos.dto.PrResponse;
 import com.zk.gymos.dto.SessionDetailResponse;
@@ -62,6 +63,12 @@ public class SessionController {
     @GetMapping("/trend/{exerciseId}")
     public Result<ExerciseTrendResponse> trend(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId) {
         return Results.success(sessionService.trend(uid(jwt), exerciseId));
+    }
+
+    /** Coaching insights: this-month body-part balance, plateaus, biggest recent gain. */
+    @GetMapping("/insights")
+    public Result<InsightsResponse> insights(@AuthenticationPrincipal Jwt jwt) {
+        return Results.success(sessionService.insights(uid(jwt)));
     }
 
     @DeleteMapping("/{id}")
