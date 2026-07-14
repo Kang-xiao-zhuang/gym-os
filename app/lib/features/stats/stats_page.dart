@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -22,7 +23,16 @@ class _StatsPageState extends ConsumerState<StatsPage> {
   Widget build(BuildContext context) {
     final async = ref.watch(sessionsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('训练统计 📈')),
+      appBar: AppBar(
+        title: const Text('训练统计 📈'),
+        actions: [
+          IconButton(
+            tooltip: '生成周报',
+            icon: const Icon(Icons.ios_share_rounded),
+            onPressed: () => context.push('/weekly-report'),
+          ),
+        ],
+      ),
       body: async.when(
         loading: () => const LoadingView(),
         error: (e, _) => EmptyView(emoji: '😵', title: '加载失败', subtitle: '$e'),

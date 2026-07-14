@@ -17,6 +17,7 @@ import '../features/history/history_page.dart';
 import '../features/history/session_detail_page.dart';
 import '../features/home/main_shell.dart';
 import '../features/profile/profile_edit_page.dart';
+import '../features/report/weekly_report_page.dart';
 import '../features/stats/stats_page.dart';
 import '../features/workout/plan_detail_page.dart';
 import '../features/workout/plans_page.dart';
@@ -61,6 +62,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/history', builder: (_, _) => const HistoryPage()),
       GoRoute(path: '/stats', builder: (_, _) => const StatsPage()),
       GoRoute(path: '/achievements', builder: (_, _) => const AchievementsPage()),
+      GoRoute(path: '/weekly-report', builder: (_, _) => const WeeklyReportPage()),
       GoRoute(
         path: '/session-detail',
         builder: (_, state) =>
