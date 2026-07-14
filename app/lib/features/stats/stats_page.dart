@@ -14,9 +14,9 @@ class StatsPage extends ConsumerStatefulWidget {
 }
 
 class _StatsPageState extends ConsumerState<StatsPage> {
-  late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  int _year = DateTime.now().year;
 
-  void _shift(int delta) => setState(() => _month = DateTime(_month.year, _month.month + delta, 1));
+  void _shiftYear(int delta) => setState(() => _year += delta);
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +36,7 @@ class _StatsPageState extends ConsumerState<StatsPage> {
           }
           final now = DateTime.now();
           final days = trainedDays(sessions);
+          final loads = daySetLoads(sessions);
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(sessionsProvider),
             child: ListView(
@@ -51,7 +52,7 @@ class _StatsPageState extends ConsumerState<StatsPage> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _Calendar(month: _month, trained: days, now: now, onShift: _shift),
+                _YearHeatmap(year: _year, loads: loads, now: now, trainedInYear: yearCount(days, _year), onShiftYear: _shiftYear),
               ],
             ),
           );
@@ -97,24 +98,90 @@ class _Stat extends StatelessWidget {
   }
 }
 
-class _Calendar extends StatelessWidget {
-  const _Calendar({required this.month, required this.trained, required this.now, required this.onShift});
+/// GitHub-style yearly check-in heatmap: 7 rows (Mon→Sun) × ~53 week columns,
+/// each cell shaded by that day's training load (total sets).
+class _YearHeatmap extends StatefulWidget {
+  const _YearHeatmap({
+    required this.year,
+    required this.loads,
+    required this.now,
+    required this.trainedInYear,
+    required this.onShiftYear,
+  });
 
-  final DateTime month;
-  final Set<DateTime> trained;
+  final int year;
+  final Map<DateTime, int> loads;
   final DateTime now;
-  final ValueChanged<int> onShift;
+  final int trainedInYear;
+  final ValueChanged<int> onShiftYear;
+
+  @override
+  State<_YearHeatmap> createState() => _YearHeatmapState();
+}
+
+class _YearHeatmapState extends State<_YearHeatmap> {
+  static const double _cell = 14;
+  static const double _gap = 3;
+  static const double _colW = _cell + _gap;
+  static const double _monthLabelH = 18;
+
+  final _scroll = ScrollController();
+
+  static const List<Color> _greens = [
+    Color(0xFF9BE9A8),
+    Color(0xFF40C463),
+    Color(0xFF30A14E),
+    Color(0xFF216E39),
+  ];
+
+  late List<List<DateTime>> _columns;
+  late DateTime _today;
+
+  @override
+  void initState() {
+    super.initState();
+    _build();
+    // Open near "today" for the current year so recent weeks are visible.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToToday());
+  }
+
+  @override
+  void didUpdateWidget(covariant _YearHeatmap old) {
+    super.didUpdateWidget(old);
+    if (old.year != widget.year) _build();
+  }
+
+  void _build() {
+    _today = DateTime(widget.now.year, widget.now.month, widget.now.day);
+    final jan1 = DateTime(widget.year, 1, 1);
+    final dec31 = DateTime(widget.year, 12, 31);
+    final start = jan1.subtract(Duration(days: jan1.weekday - 1)); // Monday on/before Jan 1
+    final cols = <List<DateTime>>[];
+    var cur = start;
+    while (!cur.isAfter(dec31)) {
+      cols.add(List.generate(7, (i) => cur.add(Duration(days: i))));
+      cur = cur.add(const Duration(days: 7));
+    }
+    _columns = cols;
+  }
+
+  void _scrollToToday() {
+    if (!_scroll.hasClients || widget.year != widget.now.year) return;
+    final startMonday = _columns.first.first;
+    final col = _today.difference(startMonday).inDays ~/ 7;
+    final target = (col * _colW - 120).clamp(0.0, _scroll.position.maxScrollExtent);
+    _scroll.jumpTo(target);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final firstWeekday = DateTime(month.year, month.month, 1).weekday; // Mon=1
-    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    final cells = <int?>[...List.filled(firstWeekday - 1, null), for (var d = 1; d <= daysInMonth; d++) d];
-    while (cells.length % 7 != 0) {
-      cells.add(null);
-    }
-
     return Container(
       padding: const EdgeInsets.all(AppTheme.pad),
       decoration: BoxDecoration(
@@ -123,68 +190,151 @@ class _Calendar extends StatelessWidget {
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              IconButton(onPressed: () => onShift(-1), icon: const Icon(Icons.chevron_left)),
+              IconButton(onPressed: () => widget.onShiftYear(-1), icon: const Icon(Icons.chevron_left)),
               Expanded(
                 child: Center(
-                  child: Text('${month.year} 年 ${month.month} 月',
+                  child: Text('${widget.year} 年 · 打卡 ${widget.trainedInYear} 天',
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                 ),
               ),
-              IconButton(onPressed: () => onShift(1), icon: const Icon(Icons.chevron_right)),
+              IconButton(
+                onPressed: widget.year < widget.now.year ? () => widget.onShiftYear(1) : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(
-            children: ['一', '二', '三', '四', '五', '六', '日']
-                .map((w) => Expanded(
-                    child: Center(
-                        child: Text(w, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)))))
-                .toList(),
-          ),
-          const SizedBox(height: 6),
-          ...List.generate(cells.length ~/ 7, (row) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                children: List.generate(7, (col) {
-                  final day = cells[row * 7 + col];
-                  return Expanded(child: _dayCell(context, day, scheme));
-                }),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _weekdayLabels(scheme),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scroll,
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _monthLabels(scheme),
+                      Row(children: _columns.map((w) => _weekColumn(w, scheme)).toList()),
+                    ],
+                  ),
+                ),
               ),
-            );
-          }),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _legend(scheme),
         ],
       ),
     );
   }
 
-  Widget _dayCell(BuildContext context, int? day, ColorScheme scheme) {
-    if (day == null) return const SizedBox(height: 40);
-    final date = DateTime(month.year, month.month, day);
-    final isTrained = trained.contains(date);
-    final isToday = date == DateTime(now.year, now.month, now.day);
-    return Center(
-      child: Container(
-        width: 34,
-        height: 34,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: isTrained ? scheme.primary : Colors.transparent,
-          border: isToday && !isTrained ? Border.all(color: scheme.primary, width: 1.5) : null,
-        ),
-        child: Text(
-          '$day',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isTrained || isToday ? FontWeight.w700 : FontWeight.w400,
-            color: isTrained ? Colors.white : (isToday ? scheme.primary : scheme.onSurface),
-          ),
-        ),
-      ),
+  Widget _weekdayLabels(ColorScheme scheme) {
+    const names = ['一', '二', '三', '四', '五', '六', '日'];
+    final style = TextStyle(fontSize: 10, color: Colors.grey.shade500);
+    return Column(
+      children: [
+        const SizedBox(height: _monthLabelH),
+        ...List.generate(7, (i) => SizedBox(
+              height: _colW,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: i.isEven ? Text(names[i], style: style) : null,
+              ),
+            )),
+      ],
     );
   }
+
+  Widget _monthLabels(ColorScheme scheme) {
+    final style = TextStyle(fontSize: 10, color: Colors.grey.shade500);
+    var lastMonth = -1;
+    final labels = <Widget>[];
+    for (final week in _columns) {
+      final monday = week.first;
+      String text = '';
+      if (monday.year == widget.year && monday.month != lastMonth) {
+        text = '${monday.month}月';
+        lastMonth = monday.month;
+      }
+      labels.add(SizedBox(
+        width: _colW,
+        height: _monthLabelH,
+        child: text.isEmpty
+            ? null
+            : OverflowBox(
+                alignment: Alignment.centerLeft,
+                maxWidth: 40,
+                child: Text(text, style: style, maxLines: 1),
+              ),
+      ));
+    }
+    return Row(children: labels);
+  }
+
+  Widget _weekColumn(List<DateTime> week, ColorScheme scheme) {
+    return Padding(
+      padding: const EdgeInsets.only(right: _gap),
+      child: Column(children: week.map((d) => _cellFor(d, scheme)).toList()),
+    );
+  }
+
+  Widget _cellFor(DateTime d, ColorScheme scheme) {
+    final inYear = d.year == widget.year;
+    if (!inYear) return const SizedBox(width: _cell, height: _colW);
+
+    final future = d.isAfter(_today);
+    final sets = widget.loads[d] ?? 0;
+    final lvl = heatLevel(sets);
+    Color color;
+    if (future) {
+      color = scheme.surfaceContainerHighest.withValues(alpha: 0.2);
+    } else if (lvl == 0) {
+      color = scheme.surfaceContainerHighest.withValues(alpha: 0.6);
+    } else {
+      color = _greens[lvl - 1];
+    }
+    final isToday = d == _today;
+    final tip = future
+        ? null
+        : '${d.month}月${d.day}日 · ${sets > 0 ? '$sets 组' : '未训练'}';
+    final box = Container(
+      width: _cell,
+      height: _cell,
+      margin: const EdgeInsets.only(bottom: _gap),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(3),
+        border: isToday ? Border.all(color: scheme.primary, width: 1.3) : null,
+      ),
+    );
+    return tip == null ? box : Tooltip(message: tip, waitDuration: const Duration(milliseconds: 300), child: box);
+  }
+
+  Widget _legend(ColorScheme scheme) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text('少', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+        const SizedBox(width: 6),
+        _swatch(scheme.surfaceContainerHighest.withValues(alpha: 0.6)),
+        for (final c in _greens) _swatch(c),
+        const SizedBox(width: 6),
+        Text('多', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+      ],
+    );
+  }
+
+  Widget _swatch(Color c) => Container(
+        width: 12,
+        height: 12,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3)),
+      );
 }

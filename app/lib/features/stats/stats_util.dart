@@ -23,6 +23,28 @@ int weekCount(Set<DateTime> days, DateTime now) {
 int monthCount(Set<DateTime> days, int year, int month) =>
     days.where((d) => d.year == year && d.month == month).length;
 
+/// Total sets per calendar day (local midnight) — the intensity source for the heatmap.
+Map<DateTime, int> daySetLoads(List<WorkoutSessionSummary> sessions) {
+  final m = <DateTime, int>{};
+  for (final s in sessions) {
+    final d = DateTime(s.when.year, s.when.month, s.when.day);
+    m[d] = (m[d] ?? 0) + s.totalSets;
+  }
+  return m;
+}
+
+/// Heatmap intensity level 0–4 from a day's total sets (0 = rest day).
+int heatLevel(int sets) {
+  if (sets <= 0) return 0;
+  if (sets <= 5) return 1;
+  if (sets <= 12) return 2;
+  if (sets <= 20) return 3;
+  return 4;
+}
+
+/// Distinct trained days within a calendar year.
+int yearCount(Set<DateTime> days, int year) => days.where((d) => d.year == year).length;
+
 /// Consecutive trained days ending today (or yesterday if today not done yet).
 int streak(Set<DateTime> days, DateTime now) {
   var d = DateTime(now.year, now.month, now.day);
