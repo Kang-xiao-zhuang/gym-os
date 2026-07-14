@@ -107,6 +107,14 @@ class ProfilePage extends ConsumerWidget {
                 ),
                 const Divider(height: 1),
                 ListTile(
+                  leading: const Text('🏅', style: TextStyle(fontSize: 20)),
+                  title: const Text('成就徽章'),
+                  subtitle: const Text('解锁你的训练里程碑'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/achievements'),
+                ),
+                const Divider(height: 1),
+                ListTile(
                   leading: const Text('🏆', style: TextStyle(fontSize: 20)),
                   title: const Text('训练历史'),
                   subtitle: const Text('回看每次训练'),

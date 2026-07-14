@@ -56,3 +56,19 @@ int streak(Set<DateTime> days, DateTime now) {
   }
   return n;
 }
+
+/// Longest run of consecutive trained days ever.
+int longestStreak(Set<DateTime> days) {
+  if (days.isEmpty) return 0;
+  final sorted = days.toList()..sort();
+  var best = 1, cur = 1;
+  for (var i = 1; i < sorted.length; i++) {
+    if (sorted[i].difference(sorted[i - 1]).inDays == 1) {
+      cur++;
+    } else {
+      cur = 1;
+    }
+    if (cur > best) best = cur;
+  }
+  return best;
+}

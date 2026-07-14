@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../features/achievements/achievements_page.dart';
 import '../features/auth/login_page.dart';
 import '../features/auth/register_page.dart';
 import '../features/body/body_page.dart';
@@ -59,6 +60,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile-edit', builder: (_, _) => const ProfileEditPage()),
       GoRoute(path: '/history', builder: (_, _) => const HistoryPage()),
       GoRoute(path: '/stats', builder: (_, _) => const StatsPage()),
+      GoRoute(path: '/achievements', builder: (_, _) => const AchievementsPage()),
       GoRoute(
         path: '/session-detail',
         builder: (_, state) =>
