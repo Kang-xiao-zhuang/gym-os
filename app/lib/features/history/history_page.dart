@@ -62,6 +62,8 @@ class _SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasPr = s.prCount > 0;
+    const gold = Color(0xFFF59E0B);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: ListTile(
@@ -71,13 +73,33 @@ class _SessionCard extends StatelessWidget {
           height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+            color: (hasPr ? gold : const Color(0xFF6366F1)).withValues(alpha: 0.14),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Text('🏋️', style: TextStyle(fontSize: 22)),
+          child: Text(hasPr ? '🏆' : '🏋️', style: const TextStyle(fontSize: 22)),
         ),
-        title: Text(s.dayTitle?.isNotEmpty == true ? s.dayTitle! : '训练',
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(s.dayTitle?.isNotEmpty == true ? s.dayTitle! : '训练',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            if (hasPr) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: gold.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('🏆 破纪录${s.prCount > 1 ? ' ×${s.prCount}' : ''}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: gold)),
+              ),
+            ],
+          ],
+        ),
         subtitle: Text([
           fmtDate(s.when),
           '${s.totalSets} 组',

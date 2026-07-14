@@ -65,16 +65,69 @@ public class SessionService {
             saved.add(logRepo.save(log));
         }
         return SessionResponse.of(s, dayTitle(req.workoutDayId()),
-                saved.size(), volume(saved), distinctExercises(saved));
+                saved.size(), volume(saved), distinctExercises(saved), 0);
     }
 
     @Transactional(readOnly = true)
     public List<SessionResponse> list(UUID userId) {
-        return sessionRepo.findByUserIdOrderByCreatedAtDesc(userId).stream()
+        List<WorkoutSession> sessions = sessionRepo.findByUserIdOrderByCreatedAtDesc(userId);
+        if (sessions.isEmpty()) return List.of();
+
+        // Load logs once per session, and equipment for every referenced exercise.
+        Map<UUID, List<WorkoutLog>> logsBySession = new HashMap<>();
+        Set<UUID> exIds = new HashSet<>();
+        for (WorkoutSession s : sessions) {
+            List<WorkoutLog> logs = logRepo.findBySessionId(s.getId());
+            logsBySession.put(s.getId(), logs);
+            for (WorkoutLog l : logs) exIds.add(l.getExerciseId());
+        }
+        Map<UUID, String> equipById = exerciseRepo.findAllById(exIds).stream()
+                .collect(Collectors.toMap(Exercise::getId, e -> e.getEquipment() == null ? "" : e.getEquipment()));
+
+        // Walk oldest→newest, tracking running records per exercise. A session earns a PR
+        // for an exercise when it BEATS an existing record (weight for weighted moves, total
+        // session reps for bodyweight) — first-ever occurrences don't count (nothing to beat).
+        Map<UUID, BigDecimal> maxWeight = new HashMap<>();
+        Map<UUID, Integer> maxSessionReps = new HashMap<>();
+        Map<UUID, Integer> prCountBySession = new HashMap<>();
+        List<WorkoutSession> chrono = new ArrayList<>(sessions);
+        Collections.reverse(chrono);
+        for (WorkoutSession s : chrono) {
+            Map<UUID, BigDecimal> sMaxW = new HashMap<>();
+            Map<UUID, Integer> sSumReps = new HashMap<>();
+            for (WorkoutLog l : logsBySession.get(s.getId())) {
+                if (l.getReps() != null) sSumReps.merge(l.getExerciseId(), l.getReps(), Integer::sum);
+                if (l.getWeight() != null) sMaxW.merge(l.getExerciseId(), l.getWeight(),
+                        (a, b) -> b.compareTo(a) > 0 ? b : a);
+            }
+            Set<UUID> exInSession = new HashSet<>();
+            exInSession.addAll(sMaxW.keySet());
+            exInSession.addAll(sSumReps.keySet());
+            int cnt = 0;
+            for (UUID ex : exInSession) {
+                if ("自重".equals(equipById.get(ex))) {
+                    Integer sr = sSumReps.get(ex);
+                    if (sr == null) continue;
+                    Integer prev = maxSessionReps.get(ex);
+                    if (prev != null && sr > prev) cnt++;
+                    if (prev == null || sr > prev) maxSessionReps.put(ex, sr);
+                } else {
+                    BigDecimal sw = sMaxW.get(ex);
+                    if (sw == null) continue;
+                    BigDecimal prev = maxWeight.get(ex);
+                    if (prev != null && sw.compareTo(prev) > 0) cnt++;
+                    if (prev == null || sw.compareTo(prev) > 0) maxWeight.put(ex, sw);
+                }
+            }
+            prCountBySession.put(s.getId(), cnt);
+        }
+
+        return sessions.stream()
                 .map(s -> {
-                    List<WorkoutLog> logs = logRepo.findBySessionId(s.getId());
+                    List<WorkoutLog> logs = logsBySession.get(s.getId());
                     return SessionResponse.of(s, dayTitle(s.getWorkoutDayId()),
-                            logs.size(), volume(logs), distinctExercises(logs));
+                            logs.size(), volume(logs), distinctExercises(logs),
+                            prCountBySession.getOrDefault(s.getId(), 0));
                 })
                 .toList();
     }

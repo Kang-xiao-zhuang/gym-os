@@ -10,6 +10,7 @@ class WorkoutSessionSummary {
     this.totalSets = 0,
     this.totalVolume = 0,
     this.exerciseCount = 0,
+    this.prCount = 0,
   });
 
   final String id;
@@ -20,6 +21,9 @@ class WorkoutSessionSummary {
   final int totalSets;
   final double totalVolume;
   final int exerciseCount;
+
+  /// How many exercises set a new personal record in this session.
+  final int prCount;
 
   static DateTime? _dt(dynamic v) => v == null ? null : DateTime.parse(v as String).toLocal();
 
@@ -32,6 +36,7 @@ class WorkoutSessionSummary {
         totalSets: (j['totalSets'] as num?)?.toInt() ?? 0,
         totalVolume: (j['totalVolume'] as num?)?.toDouble() ?? 0,
         exerciseCount: (j['exerciseCount'] as num?)?.toInt() ?? 0,
+        prCount: (j['prCount'] as num?)?.toInt() ?? 0,
       );
 
   DateTime get when => finishedAt ?? createdAt;
