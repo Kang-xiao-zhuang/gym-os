@@ -19,6 +19,7 @@ import '../features/profile/profile_edit_page.dart';
 import '../features/stats/stats_page.dart';
 import '../features/workout/plan_detail_page.dart';
 import '../features/workout/plans_page.dart';
+import '../features/workout/quick_workout_page.dart';
 import '../features/workout/workout_models.dart';
 
 /// App router. Redirects unauthenticated users to /login and re-runs whenever
@@ -53,6 +54,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => ExerciseFormPage(exercise: state.extra is Exercise ? state.extra as Exercise : null),
       ),
       GoRoute(path: '/plans', builder: (_, _) => const PlansPage()),
+      GoRoute(path: '/quick-workout', builder: (_, _) => const QuickWorkoutPage()),
       GoRoute(path: '/body', builder: (_, _) => const BodyPage()),
       GoRoute(path: '/profile-edit', builder: (_, _) => const ProfileEditPage()),
       GoRoute(path: '/history', builder: (_, _) => const HistoryPage()),

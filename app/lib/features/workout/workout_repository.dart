@@ -38,10 +38,10 @@ class WorkoutRepository {
 
   static Future<void> deleteDayExercise(String id) => ApiClient.delete('/api/day-exercises/$id');
 
-  /// Finish today's workout → persist a session with per-set logs.
-  /// Each log: {exerciseId, setNo, weight, reps}.
+  /// Finish a workout → persist a session with per-set logs.
+  /// [dayId] is null for a freestyle (planless) session. Each log: {exerciseId, setNo, weight, reps}.
   static Future<void> finishSession({
-    required String dayId,
+    String? dayId,
     required DateTime startedAt,
     required int durationMinutes,
     required List<Map<String, dynamic>> logs,

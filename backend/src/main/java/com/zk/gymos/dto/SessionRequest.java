@@ -1,16 +1,13 @@
 package com.zk.gymos.dto;
 
-import jakarta.validation.constraints.NotNull;
-
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/** Body of {@code POST /api/sessions}: finish today's workout with per-set logs. */
+/** Body of {@code POST /api/sessions}: finish a workout with per-set logs. workoutDayId is null for a freestyle (planless) session. */
 public record SessionRequest(
 
-        @NotNull(message = "训练日不能为空")
         UUID workoutDayId,
 
         OffsetDateTime startedAt,

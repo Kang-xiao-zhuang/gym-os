@@ -41,7 +41,47 @@ class TodayHomePage extends ConsumerWidget {
             const SizedBox(height: AppTheme.pad),
             const _WeekSummary(),
             const TodaySection(),
+            const SizedBox(height: AppTheme.gap),
+            const _QuickEntry(),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Always-available shortcut to a freestyle (planless) workout.
+class _QuickEntry extends StatelessWidget {
+  const _QuickEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(AppTheme.radius),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        onTap: () => context.push('/quick-workout'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppTheme.pad, vertical: 12),
+          child: Row(
+            children: [
+              const Text('⚡', style: TextStyle(fontSize: 22)),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('空手快速记录', style: TextStyle(fontWeight: FontWeight.w700)),
+                    SizedBox(height: 1),
+                    Text('不用计划，随手挑动作开练',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey.shade400),
+            ],
+          ),
         ),
       ),
     );

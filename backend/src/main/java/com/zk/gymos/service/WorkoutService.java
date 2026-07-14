@@ -11,6 +11,7 @@ import com.zk.gymos.repository.ExerciseRepository;
 import com.zk.gymos.repository.WorkoutDayExerciseRepository;
 import com.zk.gymos.repository.WorkoutDayRepository;
 import com.zk.gymos.repository.WorkoutPlanRepository;
+import com.zk.gymos.repository.WorkoutSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +29,16 @@ public class WorkoutService {
     private final WorkoutDayRepository dayRepo;
     private final WorkoutDayExerciseRepository dayExerciseRepo;
     private final ExerciseRepository exerciseRepo;
+    private final WorkoutSessionRepository sessionRepo;
 
     public WorkoutService(WorkoutPlanRepository planRepo, WorkoutDayRepository dayRepo,
-                          WorkoutDayExerciseRepository dayExerciseRepo, ExerciseRepository exerciseRepo) {
+                          WorkoutDayExerciseRepository dayExerciseRepo, ExerciseRepository exerciseRepo,
+                          WorkoutSessionRepository sessionRepo) {
         this.planRepo = planRepo;
         this.dayRepo = dayRepo;
         this.dayExerciseRepo = dayExerciseRepo;
         this.exerciseRepo = exerciseRepo;
+        this.sessionRepo = sessionRepo;
     }
 
     // ---------- plans ----------
@@ -94,7 +98,12 @@ public class WorkoutService {
     @Transactional
     public void deletePlan(UUID userId, UUID planId) {
         requirePlan(userId, planId);
-        for (WorkoutDay d : dayRepo.findByWorkoutPlanIdOrderByWeekNoAscDayNoAsc(planId)) {
+        List<WorkoutDay> days = dayRepo.findByWorkoutPlanIdOrderByWeekNoAscDayNoAsc(planId);
+        List<UUID> dayIds = days.stream().map(WorkoutDay::getId).toList();
+        if (!dayIds.isEmpty()) {
+            sessionRepo.detachFromDays(dayIds); // keep logged history, just unlink from the deleted days
+        }
+        for (WorkoutDay d : days) {
             dayExerciseRepo.deleteByWorkoutDayId(d.getId());
         }
         dayRepo.deleteByWorkoutPlanId(planId);
@@ -140,6 +149,7 @@ public class WorkoutService {
     @Transactional
     public void deleteDay(UUID userId, UUID dayId) {
         WorkoutDay d = requireDay(userId, dayId);
+        sessionRepo.detachFromDays(List.of(d.getId())); // keep logged history, just unlink from this day
         dayExerciseRepo.deleteByWorkoutDayId(d.getId());
         dayRepo.deleteById(d.getId());
     }
