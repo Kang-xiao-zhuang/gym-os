@@ -355,6 +355,18 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
     _persist();
   }
 
+  /// Fill every (not-yet-done) set of an exercise with the coached target.
+  void _applySuggestion(DayExercise e, double? weight, int? reps) {
+    setState(() {
+      for (final r in _rowsFor(e)) {
+        if (r.done) continue;
+        if (weight != null) r.weight.text = _fmtW(weight);
+        if (reps != null) r.reps.text = '$reps';
+      }
+    });
+    _persist();
+  }
+
   String get _elapsedText {
     final s = _elapsed.inSeconds;
     return '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
@@ -622,6 +634,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
                   },
                   onAdd: () => _addSet(e),
                   onRemove: () => _removeSet(e),
+                  onApply: (w, reps) => _applySuggestion(e, w, reps),
                   numField: _numField,
                 )),
             const SizedBox(height: 4),
@@ -665,6 +678,7 @@ class _ExerciseSets extends ConsumerWidget {
     required this.onToggle,
     required this.onAdd,
     required this.onRemove,
+    required this.onApply,
     required this.numField,
   });
 
@@ -673,6 +687,7 @@ class _ExerciseSets extends ConsumerWidget {
   final ValueChanged<_SetRow> onToggle;
   final VoidCallback onAdd;
   final VoidCallback onRemove;
+  final void Function(double? weight, int? reps) onApply;
   final Widget Function(TextEditingController, String) numField;
 
   @override
@@ -694,6 +709,8 @@ class _ExerciseSets extends ConsumerWidget {
         prTxt = pr.maxWeightReps != null ? '${wt}kg×${pr.maxWeightReps}' : '${wt}kg';
       }
     }
+    final lastSets = ref.watch(lastSetsProvider(exercise.exerciseId)).value;
+    final sug = _overloadSuggestion(exercise, lastSets);
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -735,6 +752,39 @@ class _ExerciseSets extends ConsumerWidget {
                           style: const TextStyle(
                               fontSize: 12, color: Color(0xFFF59E0B), fontWeight: FontWeight.w600)),
                   ],
+                ),
+              ),
+            if (sug != null && sug.canApply)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 28, right: 2),
+                child: Material(
+                  color: const Color(0xFF16A34A).withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => onApply(sug.weight, sug.reps),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      child: Row(
+                        children: [
+                          const Text('💡', style: TextStyle(fontSize: 13)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(sug.text,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 12, color: Color(0xFF15803D), fontWeight: FontWeight.w600)),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text('采用',
+                              style: TextStyle(
+                                  fontSize: 12, color: Color(0xFF16A34A), fontWeight: FontWeight.w800)),
+                          const Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF16A34A)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             const SizedBox(height: 4),
@@ -815,94 +865,6 @@ class _Hero extends StatelessWidget {
 }
 
 
-/// Today's focus card: gradient tinted by the day's main body part, big day
-/// title + exercise count. The visual anchor of the home tab.
-class _FocusHero extends ConsumerWidget {
-  const _FocusHero({required this.plan, required this.day, required this.dayId, required this.onChangePlan});
-
-  final Plan plan;
-  final Day? day;
-  final String? dayId;
-  final VoidCallback onChangePlan;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    var color = const Color(0xFF6366F1);
-    var emoji = '🏋️';
-    var subtitle = '今天，练起来';
-    if (dayId != null) {
-      final exs = ref.watch(dayExercisesProvider(dayId!)).value;
-      if (exs != null && exs.isNotEmpty) {
-        final counts = <String, int>{};
-        for (final e in exs) {
-          final bp = e.bodyPart ?? '';
-          counts[bp] = (counts[bp] ?? 0) + 1;
-        }
-        final top = counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
-        final s = bodyPartStyle(top);
-        color = s.color;
-        emoji = s.emoji;
-        subtitle = '${exs.length} 个动作${top.isEmpty ? '' : ' · 主练 $top'}';
-      }
-    }
-    final title = (day?.label != null && day!.label.isNotEmpty) ? day!.label : plan.name;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: [color, Color.lerp(color, Colors.black, 0.28)!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(plan.displayIcon, style: const TextStyle(fontSize: 13)),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(plan.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-                    ),
-                    TextButton(
-                      onPressed: onChangePlan,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text('更换', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(emoji, style: const TextStyle(fontSize: 46)),
-        ],
-      ),
-    );
-  }
-}
-
 /// A personal record broken in a single workout — either heaviest weight
 /// (weighted moves) or most reps in a set (bodyweight moves), pre-formatted.
 class PrHit {
@@ -913,6 +875,59 @@ class PrHit {
   final String? prevText; // 旧纪录，如 "92.5kg" 或 "12 次"；null = 首个纪录
 
   bool get isFirst => prevText == null;
+}
+
+/// A progressive-overload coaching hint for the next set of an exercise.
+class _Suggestion {
+  _Suggestion(this.text, {this.weight, this.reps});
+  final String text;
+  final double? weight;
+  final int? reps;
+  bool get canApply => weight != null || reps != null;
+}
+
+String _sw(double v) => v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+/// Suggest today's target from last session's actual performance + the plan target.
+/// Weighted: hit all target reps last time → +2.5kg, else repeat and finish the reps.
+/// Bodyweight: beat last session's best set by one rep. Null if there's nothing to advise.
+_Suggestion? _overloadSuggestion(DayExercise e, List<({double? weight, int? reps})>? last) {
+  final hasLast = last != null && last.isNotEmpty;
+
+  if (e.isBodyweight) {
+    if (hasLast) {
+      final maxReps = last.fold<int>(0, (a, s) => (s.reps ?? 0) > a ? (s.reps ?? 0) : a);
+      if (maxReps <= 0) return null;
+      return _Suggestion('上次最多一组 $maxReps 次，今天冲 ${maxReps + 1} 次', reps: maxReps + 1);
+    }
+    if (e.targetReps != null) return _Suggestion('按计划做 ${e.targetReps} 次', reps: e.targetReps);
+    return null;
+  }
+
+  if (hasLast) {
+    final weighted = last.where((s) => s.weight != null).toList();
+    if (weighted.isEmpty) return null;
+    final topW = weighted.map((s) => s.weight!).reduce((a, b) => b > a ? b : a);
+    final repsAtTop = weighted.where((s) => s.weight == topW).map((s) => s.reps ?? 0);
+    final minReps = repsAtTop.fold<int>(9999, (a, b) => b < a ? b : a);
+    final goal = e.targetReps;
+    if (goal != null) {
+      if (minReps >= goal) {
+        final nw = topW + 2.5;
+        return _Suggestion('上次 ${_sw(topW)}kg 做满了，今天试 ${_sw(nw)}kg × $goal', weight: nw, reps: goal);
+      }
+      return _Suggestion('先把 ${_sw(topW)}kg 的次数做满 $goal 下', weight: topW, reps: goal);
+    }
+    final r0 = weighted.firstWhere((s) => s.weight == topW).reps;
+    return _Suggestion('上次 ${_sw(topW)}kg${r0 != null ? ' × $r0' : ''}，今天争取加量', weight: topW, reps: r0);
+  }
+
+  if (e.targetWeight != null) {
+    return _Suggestion(
+        '按计划 ${_sw(e.targetWeight!)}kg${e.targetReps != null ? ' × ${e.targetReps}' : ''}',
+        weight: e.targetWeight, reps: e.targetReps);
+  }
+  return null;
 }
 
 /// Full-screen celebration shown after finishing a workout: confetti + big

@@ -36,6 +36,18 @@ final lastPerformanceProvider = FutureProvider.autoDispose.family<String?, Strin
   }).where((s) => s.isNotEmpty).join(' · ');
 });
 
+/// Structured last-session sets for an exercise (weight/reps per set), used to
+/// compute the progressive-overload suggestion. Empty if never done.
+final lastSetsProvider =
+    FutureProvider.autoDispose.family<List<({double? weight, int? reps})>, String>((ref, exerciseId) async {
+  final data = await WorkoutRepository.lastPerformance(exerciseId);
+  final sets = (data?['sets'] as List<dynamic>? ?? []);
+  return sets.map((s) {
+    final m = s as Map<String, dynamic>;
+    return (weight: (m['weight'] as num?)?.toDouble(), reps: (m['reps'] as num?)?.toInt());
+  }).toList();
+});
+
 /// Personal-record snapshot for an exercise: heaviest weight (+ reps at it) for
 /// weighted moves, and most reps in a single set for bodyweight moves.
 class PrInfo {
