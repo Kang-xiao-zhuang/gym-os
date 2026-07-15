@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/body_part.dart';
@@ -395,6 +396,7 @@ class _QuickWorkoutPageState extends ConsumerState<QuickWorkoutPage> {
                         color: set.done ? Colors.green : Colors.grey.shade400,
                       ),
                       onPressed: () {
+                        HapticFeedback.selectionClick();
                         setState(() => set.done = !set.done);
                         if (set.done) showRestTimer(context, 90);
                       },

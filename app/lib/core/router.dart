@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -43,40 +43,60 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/', builder: (_, _) => const MainShell()),
-      GoRoute(path: '/exercises', builder: (_, _) => const ExerciseListPage()),
+      GoRoute(path: '/exercises', pageBuilder: (_, s) => _fade(s, const ExerciseListPage())),
       GoRoute(
         path: '/exercise-detail',
-        builder: (_, state) {
-          final e = state.extra;
-          return e is Exercise ? ExerciseDetailPage(exercise: e) : const ExerciseListPage();
+        pageBuilder: (_, s) {
+          final e = s.extra;
+          return _fade(s, e is Exercise ? ExerciseDetailPage(exercise: e) : const ExerciseListPage());
         },
       ),
       GoRoute(
         path: '/exercise-form',
-        builder: (_, state) => ExerciseFormPage(exercise: state.extra is Exercise ? state.extra as Exercise : null),
+        pageBuilder: (_, s) => _fade(s, ExerciseFormPage(exercise: s.extra is Exercise ? s.extra as Exercise : null)),
       ),
-      GoRoute(path: '/plans', builder: (_, _) => const PlansPage()),
-      GoRoute(path: '/quick-workout', builder: (_, _) => const QuickWorkoutPage()),
-      GoRoute(path: '/body', builder: (_, _) => const BodyPage()),
-      GoRoute(path: '/profile-edit', builder: (_, _) => const ProfileEditPage()),
-      GoRoute(path: '/history', builder: (_, _) => const HistoryPage()),
-      GoRoute(path: '/stats', builder: (_, _) => const StatsPage()),
-      GoRoute(path: '/achievements', builder: (_, _) => const AchievementsPage()),
-      GoRoute(path: '/weekly-report', builder: (_, _) => const WeeklyReportPage()),
+      GoRoute(path: '/plans', pageBuilder: (_, s) => _fade(s, const PlansPage())),
+      GoRoute(path: '/quick-workout', pageBuilder: (_, s) => _fade(s, const QuickWorkoutPage())),
+      GoRoute(path: '/body', pageBuilder: (_, s) => _fade(s, const BodyPage())),
+      GoRoute(path: '/profile-edit', pageBuilder: (_, s) => _fade(s, const ProfileEditPage())),
+      GoRoute(path: '/history', pageBuilder: (_, s) => _fade(s, const HistoryPage())),
+      GoRoute(path: '/stats', pageBuilder: (_, s) => _fade(s, const StatsPage())),
+      GoRoute(path: '/achievements', pageBuilder: (_, s) => _fade(s, const AchievementsPage())),
+      GoRoute(path: '/weekly-report', pageBuilder: (_, s) => _fade(s, const WeeklyReportPage())),
       GoRoute(
         path: '/session-detail',
-        builder: (_, state) =>
-            state.extra is String ? SessionDetailPage(sessionId: state.extra as String) : const HistoryPage(),
+        pageBuilder: (_, s) =>
+            _fade(s, s.extra is String ? SessionDetailPage(sessionId: s.extra as String) : const HistoryPage()),
       ),
       GoRoute(
         path: '/plan-detail',
-        builder: (_, state) => state.extra is Plan ? PlanDetailPage(plan: state.extra as Plan) : const PlansPage(),
+        pageBuilder: (_, s) => _fade(s, s.extra is Plan ? PlanDetailPage(plan: s.extra as Plan) : const PlansPage()),
       ),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
     ],
   );
 });
+
+/// Pushed pages fade in with a subtle upward slide (tabs stay instant via IndexedStack).
+CustomTransitionPage<void> _fade(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 260),
+    reverseTransitionDuration: const Duration(milliseconds: 200),
+    child: child,
+    transitionsBuilder: (_, animation, _, child) {
+      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween(begin: const Offset(0, 0.02), end: Offset.zero).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
 
 /// Bridges a Stream into a Listenable so GoRouter re-evaluates its redirect.
 class _AuthRefresh extends ChangeNotifier {

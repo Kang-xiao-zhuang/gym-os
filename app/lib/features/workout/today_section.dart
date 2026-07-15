@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:confetti/confetti.dart';
@@ -629,6 +630,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
                   exercise: e,
                   rows: _rowsFor(e),
                   onToggle: (r) {
+                    HapticFeedback.selectionClick();
                     setState(() => r.done = !r.done);
                     _persist();
                     if (r.done) showRestTimer(context, e.restSeconds ?? 90);
@@ -967,6 +969,7 @@ class _CelebrationViewState extends State<_CelebrationView> {
     super.initState();
     _confetti = ConfettiController(duration: const Duration(seconds: 2));
     _confetti.play();
+    (widget.prs.isNotEmpty ? HapticFeedback.heavyImpact() : HapticFeedback.mediumImpact());
   }
 
   @override
