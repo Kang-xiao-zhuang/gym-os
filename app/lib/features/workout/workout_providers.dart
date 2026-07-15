@@ -5,16 +5,19 @@ import 'workout_models.dart';
 import 'workout_repository.dart';
 
 final plansProvider = FutureProvider.autoDispose<List<Plan>>((ref) async {
+  ref.keepAlive(); // cache across tab switches; refreshed via ref.invalidate on plan edits
   final data = await ApiClient.get('/api/plans') as List<dynamic>;
   return data.map((e) => Plan.fromJson(e as Map<String, dynamic>)).toList();
 });
 
 final daysProvider = FutureProvider.autoDispose.family<List<Day>, String>((ref, planId) async {
+  ref.keepAlive();
   final data = await ApiClient.get('/api/plans/$planId/days') as List<dynamic>;
   return data.map((e) => Day.fromJson(e as Map<String, dynamic>)).toList();
 });
 
 final dayExercisesProvider = FutureProvider.autoDispose.family<List<DayExercise>, String>((ref, dayId) async {
+  ref.keepAlive();
   final data = await ApiClient.get('/api/days/$dayId/exercises') as List<dynamic>;
   return data.map((e) => DayExercise.fromJson(e as Map<String, dynamic>)).toList();
 });

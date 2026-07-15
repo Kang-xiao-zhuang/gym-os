@@ -21,7 +21,7 @@ class HistoryPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('训练历史 🏆')),
       body: async.when(
-        loading: () => const LoadingView(),
+        loading: () => const ListSkeleton(leading: 44),
         error: (e, _) => EmptyView(emoji: '😵', title: '加载失败', subtitle: '$e'),
         data: (list) {
           if (list.isEmpty) {
@@ -43,6 +43,7 @@ class HistoryPage extends ConsumerWidget {
                 onDelete: () async {
                   await WorkoutRepository.deleteSession(list[i].id);
                   ref.invalidate(sessionsProvider);
+                  ref.invalidate(insightsProvider);
                 },
               ),
             ),

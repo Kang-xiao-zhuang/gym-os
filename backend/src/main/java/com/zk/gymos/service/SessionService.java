@@ -75,12 +75,10 @@ public class SessionService {
         if (sessions.isEmpty()) return List.of();
 
         // Load logs once per session, and equipment for every referenced exercise.
-        Map<UUID, List<WorkoutLog>> logsBySession = new HashMap<>();
+        Map<UUID, List<WorkoutLog>> logsBySession = groupLogsBySession(sessions);
         Set<UUID> exIds = new HashSet<>();
-        for (WorkoutSession s : sessions) {
-            List<WorkoutLog> logs = logRepo.findBySessionId(s.getId());
-            logsBySession.put(s.getId(), logs);
-            for (WorkoutLog l : logs) exIds.add(l.getExerciseId());
+        for (List<WorkoutLog> group : logsBySession.values()) {
+            for (WorkoutLog l : group) exIds.add(l.getExerciseId());
         }
         Map<UUID, String> equipById = exerciseRepo.findAllById(exIds).stream()
                 .collect(Collectors.toMap(Exercise::getId, e -> e.getEquipment() == null ? "" : e.getEquipment()));
@@ -273,12 +271,10 @@ public class SessionService {
         List<WorkoutSession> sessions = sessionRepo.findByUserIdOrderByCreatedAtDesc(userId);
         if (sessions.isEmpty()) return new InsightsResponse(List.of(), List.of(), null);
 
-        Map<UUID, List<WorkoutLog>> logsBySession = new HashMap<>();
+        Map<UUID, List<WorkoutLog>> logsBySession = groupLogsBySession(sessions);
         Set<UUID> exIds = new HashSet<>();
-        for (WorkoutSession s : sessions) {
-            List<WorkoutLog> ls = logRepo.findBySessionId(s.getId());
-            logsBySession.put(s.getId(), ls);
-            for (WorkoutLog l : ls) exIds.add(l.getExerciseId());
+        for (List<WorkoutLog> group : logsBySession.values()) {
+            for (WorkoutLog l : group) exIds.add(l.getExerciseId());
         }
         Map<UUID, Exercise> exById = exerciseRepo.findAllById(exIds).stream()
                 .collect(Collectors.toMap(Exercise::getId, Function.identity()));
@@ -355,6 +351,17 @@ public class SessionService {
         require(userId, sessionId);
         logRepo.deleteBySessionId(sessionId);
         sessionRepo.deleteById(sessionId);
+    }
+
+    /** All logs for the given sessions in ONE query, grouped by session id (empty list for logless sessions). */
+    private Map<UUID, List<WorkoutLog>> groupLogsBySession(List<WorkoutSession> sessions) {
+        List<UUID> ids = sessions.stream().map(WorkoutSession::getId).toList();
+        Map<UUID, List<WorkoutLog>> map = new HashMap<>();
+        for (UUID id : ids) map.put(id, new ArrayList<>());
+        for (WorkoutLog l : logRepo.findBySessionIdIn(ids)) {
+            map.computeIfAbsent(l.getSessionId(), k -> new ArrayList<>()).add(l);
+        }
+        return map;
     }
 
     private BigDecimal volume(List<WorkoutLog> logs) {

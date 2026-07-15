@@ -225,6 +225,7 @@ class _QuickWorkoutPageState extends ConsumerState<QuickWorkoutPage> {
         logs: logs,
       );
       ref.invalidate(sessionsProvider);
+      ref.invalidate(insightsProvider);
       if (!mounted) return;
       await showCelebration(context, minutes: minutes, sets: logs.length, volume: vol, reps: reps, prs: prs);
       if (mounted) Navigator.of(context).pop();

@@ -364,7 +364,20 @@ class _ImageHeader extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (url != null && url!.isNotEmpty)
-              Image.network(url!, fit: BoxFit.cover, errorBuilder: (_, _, _) => _placeholder())
+              Image.network(
+                url!,
+                fit: BoxFit.cover,
+                cacheWidth: 900,
+                frameBuilder: (_, child, frame, wasSync) => wasSync
+                    ? child
+                    : AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                        child: child,
+                      ),
+                errorBuilder: (_, _, _) => _placeholder(),
+              )
             else
               _placeholder(),
             if (uploading)

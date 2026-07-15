@@ -490,6 +490,7 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
         logs: logs,
       );
       ref.invalidate(sessionsProvider);
+      ref.invalidate(insightsProvider);
       for (final e in items) {
         ref.invalidate(lastPerformanceProvider(e.exerciseId));
         ref.invalidate(prProvider(e.exerciseId));

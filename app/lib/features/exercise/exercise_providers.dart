@@ -7,6 +7,7 @@ import 'exercise.dart';
 /// Fetches the exercise library from the backend. Auto-disposed so it re-fetches
 /// each time the list page is entered; call `ref.invalidate` to force a refresh.
 final exerciseListProvider = FutureProvider.autoDispose<List<Exercise>>((ref) async {
+  ref.keepAlive(); // library rarely changes; cache and refresh via ref.invalidate on CRUD
   final data = await ApiClient.get('/api/exercises') as List<dynamic>;
   return data
       .map((e) => Exercise.fromJson(e as Map<String, dynamic>))

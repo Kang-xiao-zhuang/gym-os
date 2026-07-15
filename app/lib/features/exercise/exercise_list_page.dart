@@ -32,7 +32,7 @@ class ExerciseListPage extends ConsumerWidget {
         label: const Text('新增'),
       ),
       body: async.when(
-        loading: () => const LoadingView(),
+        loading: () => const ListSkeleton(),
         error: (e, _) => EmptyView(
           emoji: '😵',
           title: '加载失败',
@@ -142,22 +142,39 @@ class _Thumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const size = 60.0;
-    Widget placeholder() => Container(
-          width: size,
-          height: size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: style.color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(style.emoji, style: const TextStyle(fontSize: 30)),
-        );
+    final placeholder = Container(
+      alignment: Alignment.center,
+      color: style.color.withValues(alpha: 0.12),
+      child: Text(style.emoji, style: const TextStyle(fontSize: 30)),
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
-      child: (url == null || url!.isEmpty)
-          ? placeholder()
-          : Image.network(url!, width: size, height: size, fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder()),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: (url == null || url!.isEmpty)
+            ? placeholder
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  placeholder, // shows while loading / on error
+                  Image.network(
+                    url!,
+                    fit: BoxFit.cover,
+                    cacheWidth: 180, // downsample the 60px thumb for smooth scrolling
+                    frameBuilder: (_, child, frame, wasSync) => wasSync
+                        ? child
+                        : AnimatedOpacity(
+                            opacity: frame == null ? 0 : 1,
+                            duration: const Duration(milliseconds: 260),
+                            curve: Curves.easeOut,
+                            child: child,
+                          ),
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }
