@@ -1,46 +1,95 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="GymOS · 你的个人健身操作系统：计划 · 训练 · 记录 · 复盘 · 进步">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="gym_os_app">
+  <meta name="apple-mobile-web-app-title" content="GymOS">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>gym_os_app</title>
+  <title>GymOS 健身</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* Branded splash shown until Flutter paints its first frame (covers the
+       CanvasKit download so the app never opens on a blank white screen). */
+    #gymos-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 55%, #A855F7 100%);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      transition: opacity .4s ease;
+    }
+    #gymos-splash.hidden { opacity: 0; }
+    #gymos-splash .emoji {
+      font-size: 64px;
+      animation: gymos-bounce 1.4s ease-in-out infinite;
+    }
+    #gymos-splash .name {
+      margin-top: 14px;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: .5px;
+    }
+    #gymos-splash .tag {
+      margin-top: 6px;
+      font-size: 12px;
+      opacity: .75;
+    }
+    #gymos-splash .ring {
+      margin-top: 26px;
+      width: 26px;
+      height: 26px;
+      border: 3px solid rgba(255,255,255,.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: gymos-spin .9s linear infinite;
+    }
+    @keyframes gymos-bounce {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-10px) scale(1.06); }
+    }
+    @keyframes gymos-spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="gymos-splash">
+    <div class="emoji">🏋️</div>
+    <div class="name">GymOS</div>
+    <div class="tag">计划 · 训练 · 记录 · 进步</div>
+    <div class="ring"></div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script>
+    (function () {
+      function removeSplash() {
+        var s = document.getElementById('gymos-splash');
+        if (!s) return;
+        s.classList.add('hidden');
+        setTimeout(function () { if (s && s.parentNode) s.parentNode.removeChild(s); }, 450);
+      }
+      window.addEventListener('flutter-first-frame', removeSplash);
+      // Fallback: never let the splash get stuck if the event is missed.
+      setTimeout(removeSplash, 12000);
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
