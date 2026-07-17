@@ -3,6 +3,8 @@ package com.zk.gymos.service;
 import com.zk.gymos.common.BusinessException;
 import com.zk.gymos.common.ResultCode;
 import com.zk.gymos.dto.ExerciseTrendResponse;
+import com.zk.gymos.dto.ImportResult;
+import com.zk.gymos.dto.ImportSessionsRequest;
 import com.zk.gymos.dto.InsightsResponse;
 import com.zk.gymos.dto.LastPerformanceResponse;
 import com.zk.gymos.dto.PrResponse;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Function;
@@ -139,7 +142,28 @@ public class SessionService {
                 .findAllById(logs.stream().map(WorkoutLog::getExerciseId).distinct().toList()).stream()
                 .collect(Collectors.toMap(Exercise::getId, Function.identity()));
 
-        // Group logs by exercise, preserving first-seen order, sets sorted by setNo.
+        return buildDetail(s, logs, byId);
+    }
+
+    /** All the user's sessions with full per-set detail, in one efficient pass (for data export). */
+    @Transactional(readOnly = true)
+    public List<SessionDetailResponse> exportAll(UUID userId) {
+        List<WorkoutSession> sessions = sessionRepo.findByUserIdOrderByCreatedAtDesc(userId);
+        if (sessions.isEmpty()) return List.of();
+        Map<UUID, List<WorkoutLog>> logsBySession = groupLogsBySession(sessions);
+        Set<UUID> exIds = new HashSet<>();
+        for (List<WorkoutLog> group : logsBySession.values()) {
+            for (WorkoutLog l : group) exIds.add(l.getExerciseId());
+        }
+        Map<UUID, Exercise> byId = exerciseRepo.findAllById(exIds).stream()
+                .collect(Collectors.toMap(Exercise::getId, Function.identity()));
+        return sessions.stream()
+                .map(s -> buildDetail(s, logsBySession.getOrDefault(s.getId(), List.of()), byId))
+                .toList();
+    }
+
+    /** Build a SessionDetailResponse from a session + its logs (grouped by exercise, sets by setNo). */
+    private SessionDetailResponse buildDetail(WorkoutSession s, List<WorkoutLog> logs, Map<UUID, Exercise> byId) {
         LinkedHashMap<UUID, List<WorkoutLog>> grouped = new LinkedHashMap<>();
         for (WorkoutLog l : logs) {
             grouped.computeIfAbsent(l.getExerciseId(), k -> new ArrayList<>()).add(l);
@@ -156,7 +180,6 @@ public class SessionService {
                     e == null ? null : e.getBodyPart(),
                     sets);
         }).toList();
-
         return new SessionDetailResponse(s.getId(), dayTitle(s.getWorkoutDayId()),
                 s.getStartedAt(), s.getFinishedAt(), s.getDurationMinutes(),
                 logs.size(), volume(logs), exercises);
@@ -344,6 +367,73 @@ public class SessionService {
         if (plateaus.size() > 3) plateaus = plateaus.subList(0, 3);
 
         return new InsightsResponse(bodyParts, plateaus, bestGain);
+    }
+
+    /**
+     * Import sessions from a JSON backup. Idempotent by session finish-instant (duplicates skipped).
+     * Exercises are matched by id then by name; unmatched names are auto-created (with body part).
+     */
+    @Transactional
+    public ImportResult importSessions(UUID userId, List<ImportSessionsRequest.SessionImport> sessions) {
+        if (sessions == null || sessions.isEmpty()) return new ImportResult(0, 0, 0);
+
+        // Dedup key = existing sessions' finish instants for this user.
+        Set<Instant> existing = sessionRepo.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(WorkoutSession::getFinishedAt).filter(Objects::nonNull)
+                .map(OffsetDateTime::toInstant).collect(Collectors.toCollection(HashSet::new));
+
+        // Exercise resolution caches (shared library).
+        List<Exercise> all = exerciseRepo.findAll();
+        Map<UUID, Exercise> byId = all.stream()
+                .collect(Collectors.toMap(Exercise::getId, Function.identity(), (a, b) -> a));
+        Map<String, Exercise> byName = new HashMap<>();
+        for (Exercise e : all) byName.putIfAbsent(e.getName(), e);
+
+        int imported = 0, skipped = 0, exCreated = 0;
+        for (ImportSessionsRequest.SessionImport si : sessions) {
+            Instant fin = si.finishedAt() == null ? null : si.finishedAt().toInstant();
+            if (fin != null && existing.contains(fin)) { skipped++; continue; }
+
+            WorkoutSession s = new WorkoutSession();
+            s.setUserId(userId);
+            s.setStartedAt(si.startedAt());
+            s.setFinishedAt(si.finishedAt());
+            s.setDurationMinutes(si.durationMinutes());
+            sessionRepo.save(s);
+
+            List<ImportSessionsRequest.ExerciseImport> exs = si.exercises() == null ? List.of() : si.exercises();
+            for (ImportSessionsRequest.ExerciseImport ei : exs) {
+                Exercise ex;
+                if (ei.exerciseId() != null && byId.containsKey(ei.exerciseId())) {
+                    ex = byId.get(ei.exerciseId());
+                } else if (ei.name() != null && byName.containsKey(ei.name())) {
+                    ex = byName.get(ei.name());
+                } else {
+                    ex = new Exercise();
+                    ex.setName(ei.name() == null || ei.name().isBlank() ? "(导入动作)" : ei.name());
+                    ex.setBodyPart(ei.bodyPart() == null || ei.bodyPart().isBlank() ? "其他" : ei.bodyPart());
+                    ex.setDifficulty((short) 1);
+                    exerciseRepo.save(ex);
+                    byId.put(ex.getId(), ex);
+                    byName.putIfAbsent(ex.getName(), ex);
+                    exCreated++;
+                }
+                List<ImportSessionsRequest.SetImport> sets = ei.sets() == null ? List.of() : ei.sets();
+                for (ImportSessionsRequest.SetImport st : sets) {
+                    WorkoutLog log = new WorkoutLog();
+                    log.setSessionId(s.getId());
+                    log.setExerciseId(ex.getId());
+                    log.setSetNo(st.setNo());
+                    log.setWeight(st.weight());
+                    log.setReps(st.reps());
+                    log.setIsCompleted(true);
+                    logRepo.save(log);
+                }
+            }
+            if (fin != null) existing.add(fin);
+            imported++;
+        }
+        return new ImportResult(imported, skipped, exCreated);
     }
 
     @Transactional

@@ -3,6 +3,8 @@ package com.zk.gymos.controller;
 import com.zk.gymos.common.Result;
 import com.zk.gymos.common.Results;
 import com.zk.gymos.dto.ExerciseTrendResponse;
+import com.zk.gymos.dto.ImportResult;
+import com.zk.gymos.dto.ImportSessionsRequest;
 import com.zk.gymos.dto.InsightsResponse;
 import com.zk.gymos.dto.LastPerformanceResponse;
 import com.zk.gymos.dto.PrResponse;
@@ -69,6 +71,18 @@ public class SessionController {
     @GetMapping("/insights")
     public Result<InsightsResponse> insights(@AuthenticationPrincipal Jwt jwt) {
         return Results.success(sessionService.insights(uid(jwt)));
+    }
+
+    /** Export ALL the user's training sessions with full per-set detail (front-end builds CSV/JSON). */
+    @GetMapping("/export")
+    public Result<List<SessionDetailResponse>> export(@AuthenticationPrincipal Jwt jwt) {
+        return Results.success(sessionService.exportAll(uid(jwt)));
+    }
+
+    /** Import training sessions from a JSON backup (idempotent; duplicate sessions skipped). */
+    @PostMapping("/import")
+    public Result<ImportResult> importSessions(@AuthenticationPrincipal Jwt jwt, @RequestBody ImportSessionsRequest req) {
+        return Results.success(sessionService.importSessions(uid(jwt), req.sessions()));
     }
 
     @DeleteMapping("/{id}")
