@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
 import '../../core/theme_mode_provider.dart';
+import '../history/session_providers.dart';
+import 'data_export.dart';
 import 'profile_providers.dart';
 
 /// The "我的" tab: account info, edit profile, 动作库, logout.
@@ -140,6 +142,22 @@ class ProfilePage extends ConsumerWidget {
                 ),
                 const Divider(height: 1),
                 ListTile(
+                  leading: const Text('📤', style: TextStyle(fontSize: 20)),
+                  title: const Text('导出训练数据'),
+                  subtitle: const Text('CSV 表格 / JSON 备份'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showExportSheet(context),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Text('📥', style: TextStyle(fontSize: 20)),
+                  title: const Text('导入训练数据'),
+                  subtitle: const Text('从 JSON 备份恢复（自动跳过重复）'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _import(context, ref),
+                ),
+                const Divider(height: 1),
+                ListTile(
                   leading: Icon(Icons.logout_rounded, color: Colors.red.shade400),
                   title: Text('退出登录', style: TextStyle(color: Colors.red.shade400)),
                   onTap: () => Supabase.instance.client.auth.signOut(),
@@ -150,5 +168,77 @@ class ProfilePage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  void _showExportSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Text('📊', style: TextStyle(fontSize: 20)),
+              title: const Text('CSV 表格'),
+              subtitle: const Text('每组一行，Excel 可打开'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                _run(context, exportTrainingCsv, (n) => n == 0 ? '暂无训练数据可导出' : '已导出 $n 条记录 📤');
+              },
+            ),
+            ListTile(
+              leading: const Text('🗄️', style: TextStyle(fontSize: 20)),
+              title: const Text('JSON 备份'),
+              subtitle: const Text('完整结构，可回导恢复'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                _run(context, exportTrainingJson, (n) => n == 0 ? '暂无训练数据可导出' : '已备份 $n 次训练 🗄️');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _run(BuildContext context, Future<int> Function() action, String Function(int) msg) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('处理中…')));
+    try {
+      final n = await action();
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text(msg(n))));
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text('操作失败：$e')));
+    }
+  }
+
+  Future<void> _import(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: const Text('导入训练数据'),
+        content: const Text('从 JSON 备份恢复训练记录。\n重复的训练会自动跳过，缺失的动作会自动创建。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(dctx, true), child: const Text('选择文件')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final r = await importTrainingJson();
+      if (r.cancelled) return;
+      ref.invalidate(sessionsProvider);
+      ref.invalidate(insightsProvider);
+      messenger.showSnackBar(SnackBar(
+        content: Text('导入完成：新增 ${r.imported}，跳过重复 ${r.skipped}'
+            '${r.exercisesCreated > 0 ? '，新建动作 ${r.exercisesCreated}' : ''} ✅'),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('导入失败：$e')));
+    }
   }
 }
