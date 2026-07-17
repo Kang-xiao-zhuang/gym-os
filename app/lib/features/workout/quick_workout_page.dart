@@ -302,9 +302,12 @@ class _QuickWorkoutPageState extends ConsumerState<QuickWorkoutPage> {
         children: [
           const Text('⚡', style: TextStyle(fontSize: 26)),
           const SizedBox(width: 10),
-          Text('训练中 $_elapsedText',
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-          const Spacer(),
+          Expanded(
+            child: Text('训练中 $_elapsedText',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+          ),
+          const SizedBox(width: 8),
           Text(vol > 0 ? '🏋️ ${vol.toStringAsFixed(0)} kg' : '💪 $_totalReps 次',
               style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
         ],
@@ -484,7 +487,11 @@ class _ExercisePickerState extends State<_ExercisePicker> {
               ),
             ),
             Expanded(
-              child: ListView.builder(
+              child: list.isEmpty
+                  ? Center(
+                      child: Text(q.isEmpty ? '暂无动作' : '没有找到「$q」',
+                          style: TextStyle(color: Colors.grey.shade500)))
+                  : ListView.builder(
                 itemCount: list.length,
                 itemBuilder: (_, i) {
                   final e = list[i];

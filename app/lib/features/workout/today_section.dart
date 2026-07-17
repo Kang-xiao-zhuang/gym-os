@@ -586,9 +586,12 @@ class _SetLoggerState extends ConsumerState<_SetLogger> {
               children: [
                 Icon(Icons.timer_outlined, size: 15, color: Colors.grey.shade500),
                 const SizedBox(width: 4),
-                Text('训练中 $_elapsedText',
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5, fontWeight: FontWeight.w600)),
-                const Spacer(),
+                Expanded(
+                  child: Text('训练中 $_elapsedText',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
                 Text(vol > 0 ? '🏋️ ${vol.toStringAsFixed(0)} kg' : '💪 ${_totalReps(items)} 次',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 12.5, fontWeight: FontWeight.w700)),
               ],

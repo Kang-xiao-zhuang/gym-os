@@ -265,12 +265,16 @@ class _TrendCardState extends ConsumerState<_TrendCard> {
                     Text('${_fmt(last)} $unit',
                         style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                     const SizedBox(width: 8),
-                    Text(
-                      delta >= 0 ? '较首次 +${_fmt(delta)}' : '较首次 ${_fmt(delta)}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: delta >= 0 ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                    Flexible(
+                      child: Text(
+                        delta >= 0 ? '较首次 +${_fmt(delta)}' : '较首次 ${_fmt(delta)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: delta >= 0 ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                        ),
                       ),
                     ),
                   ],

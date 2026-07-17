@@ -14,7 +14,9 @@ final authUserProvider = StreamProvider<User?>((ref) async* {
 String displayName(User? user) {
   final nick = (user?.userMetadata?['nickname'] as String?)?.trim();
   if (nick != null && nick.isNotEmpty) return nick;
-  return user?.email?.split('@').first ?? '训练者';
+  final emailName = user?.email?.split('@').first.trim();
+  if (emailName != null && emailName.isNotEmpty) return emailName;
+  return '训练者';
 }
 
 String? avatarUrl(User? user) {

@@ -68,8 +68,12 @@ class SessionDetailPage extends ConsumerWidget {
                         children: [
                           Text(st.emoji, style: const TextStyle(fontSize: 20)),
                           const SizedBox(width: 8),
-                          Text(e.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                          const Spacer(),
+                          Expanded(
+                            child: Text(e.name,
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                          const SizedBox(width: 8),
                           Text('${e.sets.length} 组', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
                         ],
                       ),
@@ -83,7 +87,11 @@ class SessionDetailPage extends ConsumerWidget {
                                   child: Text('第${set.setNo ?? '-'}组',
                                       style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                                 ),
-                                Text(set.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                Expanded(
+                                  child: Text(set.label,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
                               ],
                             ),
                           )),

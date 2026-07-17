@@ -239,8 +239,13 @@ class _DayBody extends ConsumerWidget {
                 trailing: IconButton(
                   icon: Icon(Icons.close_rounded, size: 18, color: Colors.grey.shade500),
                   onPressed: () async {
-                    await WorkoutRepository.deleteDayExercise(e.id);
-                    ref.invalidate(dayExercisesProvider(day.id));
+                    final messenger = ScaffoldMessenger.of(context);
+                    try {
+                      await WorkoutRepository.deleteDayExercise(e.id);
+                      ref.invalidate(dayExercisesProvider(day.id));
+                    } catch (e2) {
+                      messenger.showSnackBar(SnackBar(content: Text('删除失败：$e2')));
+                    }
                   },
                 ),
               ),

@@ -40,7 +40,8 @@ class ProfilePage extends ConsumerWidget {
                   backgroundColor: Colors.white24,
                   backgroundImage: avatar != null ? NetworkImage(avatar) : null,
                   child: avatar == null
-                      ? Text(name.characters.first, style: const TextStyle(color: Colors.white, fontSize: 24))
+                      ? Text(name.characters.isEmpty ? '?' : name.characters.first,
+                          style: const TextStyle(color: Colors.white, fontSize: 24))
                       : null,
                 ),
                 const SizedBox(width: 14),

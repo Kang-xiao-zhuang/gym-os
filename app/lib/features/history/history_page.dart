@@ -41,9 +41,14 @@ class HistoryPage extends ConsumerWidget {
                 s: list[i],
                 onOpen: () => context.push('/session-detail', extra: list[i].id),
                 onDelete: () async {
-                  await WorkoutRepository.deleteSession(list[i].id);
-                  ref.invalidate(sessionsProvider);
-                  ref.invalidate(insightsProvider);
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await WorkoutRepository.deleteSession(list[i].id);
+                    ref.invalidate(sessionsProvider);
+                    ref.invalidate(insightsProvider);
+                  } catch (e) {
+                    messenger.showSnackBar(SnackBar(content: Text('删除失败：$e')));
+                  }
                 },
               ),
             ),

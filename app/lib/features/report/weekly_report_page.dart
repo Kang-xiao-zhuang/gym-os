@@ -108,9 +108,12 @@ class _WeeklyReportPageState extends ConsumerState<WeeklyReportPage> {
               _weekSwitcher(start),
               const SizedBox(height: 16),
               Center(
-                child: RepaintBoundary(
-                  key: _cardKey,
-                  child: _ShareCard(start: start, stats: stats),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: RepaintBoundary(
+                    key: _cardKey,
+                    child: _ShareCard(start: start, stats: stats),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),

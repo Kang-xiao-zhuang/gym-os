@@ -190,8 +190,13 @@ class _BodyPageState extends ConsumerState<BodyPage> {
                 ...items.reversed.map((m) => _HistoryTile(
                       m: m,
                       onDelete: () async {
-                        await BodyRepository.delete(m.id);
-                        ref.invalidate(measurementsProvider);
+                        final messenger = ScaffoldMessenger.of(context);
+                        try {
+                          await BodyRepository.delete(m.id);
+                          ref.invalidate(measurementsProvider);
+                        } catch (e) {
+                          messenger.showSnackBar(SnackBar(content: Text('删除失败：$e')));
+                        }
                       },
                     )),
               ],

@@ -422,7 +422,7 @@ class _YearHeatmapState extends State<_YearHeatmap> {
 
   Widget _weekdayLabels(ColorScheme scheme) {
     const names = ['一', '二', '三', '四', '五', '六', '日'];
-    final style = TextStyle(fontSize: 10, color: Colors.grey.shade500);
+    final style = TextStyle(fontSize: 10, color: scheme.onSurfaceVariant);
     return Column(
       children: [
         const SizedBox(height: _monthLabelH),
@@ -438,7 +438,7 @@ class _YearHeatmapState extends State<_YearHeatmap> {
   }
 
   Widget _monthLabels(ColorScheme scheme) {
-    final style = TextStyle(fontSize: 10, color: Colors.grey.shade500);
+    final style = TextStyle(fontSize: 10, color: scheme.onSurfaceVariant);
     var lastMonth = -1;
     final labels = <Widget>[];
     for (final week in _columns) {
