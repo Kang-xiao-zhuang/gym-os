@@ -103,10 +103,19 @@ class MuscleMapCard extends ConsumerWidget {
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 250,
-                  child: SvgPicture.string(
-                    _muscleSvg,
-                    fit: BoxFit.contain,
-                    colorMapper: _MuscleColorMapper(intensity, neutral),
+                  // 打开时身体从暗灰逐渐"点亮"到实际训练强度
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 850),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, t, _) => SvgPicture.string(
+                      _muscleSvg,
+                      fit: BoxFit.contain,
+                      colorMapper: _MuscleColorMapper(
+                        {for (final e in intensity.entries) e.key: e.value * t},
+                        neutral,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 2),
