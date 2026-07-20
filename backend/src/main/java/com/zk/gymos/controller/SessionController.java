@@ -74,6 +74,12 @@ public class SessionController {
         return Results.success(sessionService.insights(uid(jwt)));
     }
 
+    /** All-time sets per body part — powers the muscle map. */
+    @GetMapping("/muscle-map")
+    public Result<List<InsightsResponse.BodyPartLoad>> muscleMap(@AuthenticationPrincipal Jwt jwt) {
+        return Results.success(sessionService.muscleMap(uid(jwt)));
+    }
+
     /** Month calendar: trained days with body parts + volume + a compact exercise breakdown.
      *  {@code month} is "yyyy-MM"; defaults to the current month when omitted. */
     @GetMapping("/calendar")

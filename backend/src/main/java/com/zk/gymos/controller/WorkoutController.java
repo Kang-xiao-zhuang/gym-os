@@ -56,6 +56,12 @@ public class WorkoutController {
         return Results.success(workoutService.activatePlan(uid(jwt), planId));
     }
 
+    /** Rolling "next up": the next training day to do in the active plan (null if none). */
+    @GetMapping("/plans/next")
+    public Result<NextUpResponse> nextUp(@AuthenticationPrincipal Jwt jwt) {
+        return Results.success(workoutService.nextUp(uid(jwt)));
+    }
+
     // ----- days -----
 
     @GetMapping("/plans/{planId}/days")

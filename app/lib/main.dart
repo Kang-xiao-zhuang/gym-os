@@ -36,6 +36,22 @@ class GymOsApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
       routerConfig: router,
+      // App-wide soft gradient behind every (transparent) scaffold.
+      builder: (context, child) {
+        final dark = Theme.of(context).brightness == Brightness.dark;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: dark
+                  ? const [Color(0xFF1B1B26), Color(0xFF0E0E12)]
+                  : const [Color(0xFFECEEFF), Color(0xFFF7F7FB)],
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }

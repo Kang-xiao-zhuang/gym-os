@@ -7,6 +7,7 @@ import com.zk.gymos.entity.Exercise;
 import com.zk.gymos.entity.WorkoutDay;
 import com.zk.gymos.entity.WorkoutDayExercise;
 import com.zk.gymos.entity.WorkoutPlan;
+import com.zk.gymos.entity.WorkoutSession;
 import com.zk.gymos.repository.ExerciseRepository;
 import com.zk.gymos.repository.WorkoutDayExerciseRepository;
 import com.zk.gymos.repository.WorkoutDayRepository;
@@ -15,6 +16,8 @@ import com.zk.gymos.repository.WorkoutSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -108,6 +111,49 @@ public class WorkoutService {
         }
         dayRepo.deleteByWorkoutPlanId(planId);
         planRepo.deleteById(planId);
+    }
+
+    /**
+     * The next training day to do in the active plan, by rolling rotation: the day after the one
+     * most recently completed (matched via a session's workoutDayId), cycling back to the first.
+     * Zero configuration — adapts to any plan and any cadence. Null if no active plan / no days.
+     */
+    @Transactional(readOnly = true)
+    public NextUpResponse nextUp(UUID userId) {
+        WorkoutPlan active = planRepo.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .filter(p -> Boolean.TRUE.equals(p.getIsActive()))
+                .findFirst().orElse(null);
+        if (active == null) return null;
+        List<WorkoutDay> days = dayRepo.findByWorkoutPlanIdOrderByWeekNoAscDayNoAsc(active.getId());
+        if (days.isEmpty()) return null;
+
+        Map<UUID, Integer> indexByDayId = new HashMap<>();
+        for (int i = 0; i < days.size(); i++) indexByDayId.put(days.get(i).getId(), i);
+
+        // Most recent session logged against a day of THIS plan → what we did last.
+        WorkoutDay lastDone = null;
+        OffsetDateTime lastDoneAt = null;
+        for (WorkoutSession s : sessionRepo.findByUserIdOrderByCreatedAtDesc(userId)) {
+            Integer idx = s.getWorkoutDayId() == null ? null : indexByDayId.get(s.getWorkoutDayId());
+            if (idx != null) {
+                lastDone = days.get(idx);
+                lastDoneAt = s.getCreatedAt();
+                break;
+            }
+        }
+        int nextIdx = lastDone == null ? 0 : (indexByDayId.get(lastDone.getId()) + 1) % days.size();
+        WorkoutDay next = days.get(nextIdx);
+
+        List<WorkoutDayExercise> items = dayExerciseRepo.findByWorkoutDayIdOrderBySortOrderAsc(next.getId());
+        Map<UUID, Exercise> exById = exerciseRepo
+                .findAllById(items.stream().map(WorkoutDayExercise::getExerciseId).toList()).stream()
+                .collect(Collectors.toMap(Exercise::getId, Function.identity()));
+        List<DayExerciseResponse> exercises = items.stream()
+                .map(w -> DayExerciseResponse.of(w, exById.get(w.getExerciseId()))).toList();
+
+        return new NextUpResponse(active.getId(), active.getName(), active.getIcon(),
+                next.getId(), next.getTitle(), next.getDayNo(), exercises,
+                lastDone == null ? null : lastDone.getTitle(), lastDoneAt);
     }
 
     // ---------- days ----------

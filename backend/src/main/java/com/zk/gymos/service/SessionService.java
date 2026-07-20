@@ -412,6 +412,32 @@ public class SessionService {
         return out;
     }
 
+    /** All-time sets trained per body part (for the muscle map). Ordered by sets desc. */
+    @Transactional(readOnly = true)
+    public List<InsightsResponse.BodyPartLoad> muscleMap(UUID userId) {
+        List<WorkoutSession> sessions = sessionRepo.findByUserIdOrderByCreatedAtDesc(userId);
+        if (sessions.isEmpty()) return List.of();
+        Map<UUID, List<WorkoutLog>> logsBySession = groupLogsBySession(sessions);
+        Set<UUID> exIds = new HashSet<>();
+        for (List<WorkoutLog> group : logsBySession.values()) {
+            for (WorkoutLog l : group) exIds.add(l.getExerciseId());
+        }
+        Map<UUID, Exercise> exById = exerciseRepo.findAllById(exIds).stream()
+                .collect(Collectors.toMap(Exercise::getId, Function.identity()));
+        Map<String, Integer> setsByPart = new LinkedHashMap<>();
+        for (List<WorkoutLog> group : logsBySession.values()) {
+            for (WorkoutLog l : group) {
+                Exercise e = exById.get(l.getExerciseId());
+                String bp = (e == null || e.getBodyPart() == null) ? "其他" : e.getBodyPart();
+                setsByPart.merge(bp, 1, Integer::sum);
+            }
+        }
+        return setsByPart.entrySet().stream()
+                .sorted((a, b) -> b.getValue() - a.getValue())
+                .map(en -> new InsightsResponse.BodyPartLoad(en.getKey(), en.getValue()))
+                .toList();
+    }
+
     /**
      * Import sessions from a JSON backup. Idempotent by session finish-instant (duplicates skipped).
      * Exercises are matched by id then by name; unmatched names are auto-created (with body part).

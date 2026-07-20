@@ -8,6 +8,7 @@ import 'body_providers.dart';
 import 'goal_provider.dart';
 import 'body_repository.dart';
 import 'measurement.dart';
+import 'muscle_map.dart';
 
 class _Metric {
   const _Metric(this.key, this.label, this.emoji, this.unit, this.color);
@@ -158,6 +159,8 @@ class _BodyPageState extends ConsumerState<BodyPage> {
                   goal: goal,
                   onEdit: _editGoal,
                 ),
+                const SizedBox(height: 16),
+                const MuscleMapCard(),
                 const SizedBox(height: 20),
                 Text('  趋势', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 10),

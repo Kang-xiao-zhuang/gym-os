@@ -25,7 +25,8 @@ class AppTheme {
     final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: scheme.brightness);
 
     return base.copyWith(
-      scaffoldBackgroundColor: scaffoldBg,
+      // Transparent so the app-wide gradient (see main.dart builder) shows through.
+      scaffoldBackgroundColor: Colors.transparent,
       splashFactory: InkSparkle.splashFactory,
       textTheme: base.textTheme.copyWith(
         headlineSmall: base.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.4),
@@ -33,7 +34,7 @@ class AppTheme {
         titleMedium: base.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: scaffoldBg,
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0.5,

@@ -11,6 +11,13 @@ final calendarProvider = FutureProvider.autoDispose.family<List<CalendarDay>, St
   return data.map((e) => CalendarDay.fromJson(e as Map<String, dynamic>)).toList();
 });
 
+/// Rolling "next up" day in the active plan; null when there's no active plan/days.
+final nextUpProvider = FutureProvider.autoDispose<NextUp?>((ref) async {
+  final data = await ApiClient.get('/api/plans/next');
+  if (data == null) return null;
+  return NextUp.fromJson(data as Map<String, dynamic>);
+});
+
 /// Body-part → colour for the calendar dots + legend. Falls back to grey.
 Color bodyPartColor(String bp) {
   switch (bp) {
