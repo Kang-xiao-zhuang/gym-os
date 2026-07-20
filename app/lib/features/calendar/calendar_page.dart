@@ -22,6 +22,7 @@ class CalendarPage extends ConsumerStatefulWidget {
 
 class _CalendarPageState extends ConsumerState<CalendarPage> {
   late DateTime _month;
+  int? _selectedDay; // 展开的那天(就地下拉,而非弹窗)
 
   @override
   void initState() {
@@ -36,7 +37,10 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     return _month.year == now.year && _month.month == now.month;
   }
 
-  void _shift(int months) => setState(() => _month = DateTime(_month.year, _month.month + months));
+  void _shift(int months) => setState(() {
+        _month = DateTime(_month.year, _month.month + months);
+        _selectedDay = null;
+      });
 
   static const _week = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -214,27 +218,48 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     );
   }
 
-  // ---- 大格子月历 ----
+  // ---- 大格子月历(按周排;选中那天在本周行下方就地展开)----
   Widget _grid(BuildContext context, Map<int, CalendarDay> byDay) {
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final leading = _month.weekday - 1; // Mon-first
-    final total = leading + daysInMonth;
-    final rows = (total / 7).ceil();
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: rows * 7,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-        mainAxisExtent: 108, // 大格子:固定高度,容得下动作
-        mainAxisSpacing: 4,
-        crossAxisSpacing: 4,
-      ),
-      itemBuilder: (context, i) {
-        final dayNo = i - leading + 1;
-        if (dayNo < 1 || dayNo > daysInMonth) return const SizedBox();
-        return _cell(context, dayNo, byDay[dayNo]);
-      },
+    final weeks = <List<int?>>[];
+    var d = 1 - leading;
+    while (d <= daysInMonth) {
+      final wk = <int?>[];
+      for (var i = 0; i < 7; i++) {
+        wk.add((d >= 1 && d <= daysInMonth) ? d : null);
+        d++;
+      }
+      weeks.add(wk);
+    }
+    final sel = _selectedDay;
+    return Column(
+      children: [
+        for (final wk in weeks) ...[
+          SizedBox(
+            height: 104,
+            child: Row(
+              children: [
+                for (final dn in wk)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: dn == null ? const SizedBox() : _cell(context, dn, byDay[dn]),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: (sel != null && wk.contains(sel) && byDay[sel] != null)
+                ? _dayDetail(context, byDay[sel]!)
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
+      ],
     );
   }
 
@@ -243,19 +268,22 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     final now = DateTime.now();
     final isToday = _month.year == now.year && _month.month == now.month && day == now.day;
     final trained = data != null && data.exercises.isNotEmpty;
+    final selected = _selectedDay == day;
 
     return GestureDetector(
-      onTap: trained ? () => _showDaySheet(context, data) : null,
+      onTap: trained ? () => setState(() => _selectedDay = selected ? null : day) : null,
       child: Stack(
         children: [
           Container(
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: trained ? scheme.primary.withValues(alpha: 0.06) : scheme.surfaceContainerHighest.withValues(alpha: 0.25),
+              color: selected
+                  ? scheme.primary.withValues(alpha: 0.16)
+                  : (trained ? scheme.primary.withValues(alpha: 0.06) : scheme.surfaceContainerHighest.withValues(alpha: 0.25)),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isToday ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.4),
-                width: isToday ? 1.6 : 0.6,
+                color: (selected || isToday) ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.4),
+                width: selected ? 1.8 : (isToday ? 1.6 : 0.6),
               ),
             ),
             child: Column(
@@ -318,72 +346,79 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     return widgets;
   }
 
-  // ---- 某天详情弹层(完整动作 + 组数)----
-  void _showDaySheet(BuildContext context, CalendarDay d) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        final scheme = Theme.of(ctx).colorScheme;
-        final meta = <String>[];
-        if (d.durationMinutes != null) meta.add('${d.durationMinutes} 分钟');
-        meta.add('${d.sets} 组');
-        if (d.volume > 0) meta.add('${d.volume.toStringAsFixed(0)} kg 容量');
-        if (d.prCount > 0) meta.add('⭐ ${d.prCount} 个 PR');
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(AppTheme.pad, 0, AppTheme.pad, AppTheme.pad),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+  // ---- 某天详情:就地下拉面板(完整动作 + 组数)----
+  Widget _dayDetail(BuildContext context, CalendarDay d) {
+    final scheme = Theme.of(context).colorScheme;
+    final meta = <String>[];
+    if (d.durationMinutes != null) meta.add('${d.durationMinutes} 分钟');
+    meta.add('${d.sets} 组');
+    if (d.volume > 0) meta.add('${d.volume.toStringAsFixed(0)} kg 容量');
+    if (d.prCount > 0) meta.add('⭐ ${d.prCount} 个 PR');
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(d.date.day),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+      builder: (context, t, child) => Opacity(opacity: t, child: child),
+      child: Container(
+      margin: const EdgeInsets.only(top: 2, bottom: 6),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('${d.date.month} 月 ${d.date.day} 日 · 练了这些',
+                    style: Theme.of(context).textTheme.titleMedium),
+              ),
+              InkWell(
+                onTap: () => setState(() => _selectedDay = null),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(padding: const EdgeInsets.all(2), child: Icon(Icons.close, size: 18, color: scheme.onSurfaceVariant)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(meta.join(' · '), style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5)),
+          const SizedBox(height: 8),
+          for (var i = 0; i < d.exercises.length; i++) ...[
+            if (i > 0) Divider(height: 14, color: scheme.outlineVariant.withValues(alpha: 0.4)),
+            Row(
               children: [
-                Text('${d.date.month} 月 ${d.date.day} 日 · 练了这些', style: Theme.of(ctx).textTheme.titleLarge),
-                const SizedBox(height: 4),
-                Text(meta.join(' · '), style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
-                const SizedBox(height: AppTheme.gap),
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: d.exercises.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final ex = d.exercises[i];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Container(width: 10, height: 10, decoration: BoxDecoration(color: bodyPartColor(ex.bodyPart), shape: BoxShape.circle)),
-                        title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text(ex.setsLabel),
-                        trailing: Text(ex.bodyPart, style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: AppTheme.gap),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => _repeatWorkout(ctx, d),
-                    icon: const Icon(Icons.replay),
-                    label: const Text('再练一次'),
-                  ),
-                ),
+                Container(width: 10, height: 10, margin: const EdgeInsets.only(right: 10), decoration: BoxDecoration(color: bodyPartColor(d.exercises[i].bodyPart), shape: BoxShape.circle)),
+                Expanded(child: Text(d.exercises[i].name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                Text(d.exercises[i].setsLabel, style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
               ],
             ),
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => _repeatWorkout(d),
+              icon: const Icon(Icons.replay),
+              label: const Text('再练一次'),
+            ),
           ),
-        );
-      },
+        ],
+      ),
+      ),
     );
   }
 
   /// Prefill a fresh quick workout with this day's exercises.
-  Future<void> _repeatWorkout(BuildContext sheetCtx, CalendarDay d) async {
+  Future<void> _repeatWorkout(CalendarDay d) async {
     final rootNav = Navigator.of(context);
-    final sheetNav = Navigator.of(sheetCtx);
     final messenger = ScaffoldMessenger.of(context);
     final all = await ref.read(exerciseListProvider.future);
     final ids = d.exercises.map((e) => e.exerciseId).toSet();
     final picked = <Exercise>[for (final e in all) if (ids.contains(e.id)) e];
-    sheetNav.pop(); // 关闭弹层
     if (picked.isEmpty) {
       messenger.showSnackBar(const SnackBar(content: Text('这些动作在动作库里找不到了')));
       return;
