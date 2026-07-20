@@ -2,6 +2,7 @@ package com.zk.gymos.controller;
 
 import com.zk.gymos.common.Result;
 import com.zk.gymos.common.Results;
+import com.zk.gymos.dto.CalendarDayResponse;
 import com.zk.gymos.dto.ExerciseTrendResponse;
 import com.zk.gymos.dto.ImportResult;
 import com.zk.gymos.dto.ImportSessionsRequest;
@@ -71,6 +72,16 @@ public class SessionController {
     @GetMapping("/insights")
     public Result<InsightsResponse> insights(@AuthenticationPrincipal Jwt jwt) {
         return Results.success(sessionService.insights(uid(jwt)));
+    }
+
+    /** Month calendar: trained days with body parts + volume + a compact exercise breakdown.
+     *  {@code month} is "yyyy-MM"; defaults to the current month when omitted. */
+    @GetMapping("/calendar")
+    public Result<List<CalendarDayResponse>> calendar(@AuthenticationPrincipal Jwt jwt,
+                                                      @RequestParam(required = false) String month) {
+        java.time.YearMonth ym = (month == null || month.isBlank())
+                ? java.time.YearMonth.now() : java.time.YearMonth.parse(month);
+        return Results.success(sessionService.calendar(uid(jwt), ym));
     }
 
     /** Export ALL the user's training sessions with full per-set detail (front-end builds CSV/JSON). */

@@ -16,7 +16,10 @@ import 'workout_repository.dart';
 /// A freestyle (planless) workout: pick exercises from the library on the fly,
 /// log sets, and finish — saved as a session with no workoutDayId.
 class QuickWorkoutPage extends ConsumerStatefulWidget {
-  const QuickWorkoutPage({super.key});
+  const QuickWorkoutPage({super.key, this.initialExercises});
+
+  /// Optional exercises to prefill (e.g. "再练一次" from the training calendar).
+  final List<Exercise>? initialExercises;
 
   @override
   ConsumerState<QuickWorkoutPage> createState() => _QuickWorkoutPageState();
@@ -48,6 +51,9 @@ class _QuickWorkoutPageState extends ConsumerState<QuickWorkoutPage> {
   @override
   void initState() {
     super.initState();
+    for (final ex in widget.initialExercises ?? const <Exercise>[]) {
+      _items.add(_QExercise(ex));
+    }
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _elapsed = DateTime.now().difference(_start));
     });

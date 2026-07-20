@@ -2,6 +2,7 @@ package com.zk.gymos.service;
 
 import com.zk.gymos.common.BusinessException;
 import com.zk.gymos.common.ResultCode;
+import com.zk.gymos.dto.CalendarDayResponse;
 import com.zk.gymos.dto.ExerciseTrendResponse;
 import com.zk.gymos.dto.ImportResult;
 import com.zk.gymos.dto.ImportSessionsRequest;
@@ -86,43 +87,7 @@ public class SessionService {
         Map<UUID, String> equipById = exerciseRepo.findAllById(exIds).stream()
                 .collect(Collectors.toMap(Exercise::getId, e -> e.getEquipment() == null ? "" : e.getEquipment()));
 
-        // Walk oldest→newest, tracking running records per exercise. A session earns a PR
-        // for an exercise when it BEATS an existing record (weight for weighted moves, total
-        // session reps for bodyweight) — first-ever occurrences don't count (nothing to beat).
-        Map<UUID, BigDecimal> maxWeight = new HashMap<>();
-        Map<UUID, Integer> maxSessionReps = new HashMap<>();
-        Map<UUID, Integer> prCountBySession = new HashMap<>();
-        List<WorkoutSession> chrono = new ArrayList<>(sessions);
-        Collections.reverse(chrono);
-        for (WorkoutSession s : chrono) {
-            Map<UUID, BigDecimal> sMaxW = new HashMap<>();
-            Map<UUID, Integer> sSumReps = new HashMap<>();
-            for (WorkoutLog l : logsBySession.get(s.getId())) {
-                if (l.getReps() != null) sSumReps.merge(l.getExerciseId(), l.getReps(), Integer::sum);
-                if (l.getWeight() != null) sMaxW.merge(l.getExerciseId(), l.getWeight(),
-                        (a, b) -> b.compareTo(a) > 0 ? b : a);
-            }
-            Set<UUID> exInSession = new HashSet<>();
-            exInSession.addAll(sMaxW.keySet());
-            exInSession.addAll(sSumReps.keySet());
-            int cnt = 0;
-            for (UUID ex : exInSession) {
-                if ("自重".equals(equipById.get(ex))) {
-                    Integer sr = sSumReps.get(ex);
-                    if (sr == null) continue;
-                    Integer prev = maxSessionReps.get(ex);
-                    if (prev != null && sr > prev) cnt++;
-                    if (prev == null || sr > prev) maxSessionReps.put(ex, sr);
-                } else {
-                    BigDecimal sw = sMaxW.get(ex);
-                    if (sw == null) continue;
-                    BigDecimal prev = maxWeight.get(ex);
-                    if (prev != null && sw.compareTo(prev) > 0) cnt++;
-                    if (prev == null || sw.compareTo(prev) > 0) maxWeight.put(ex, sw);
-                }
-            }
-            prCountBySession.put(s.getId(), cnt);
-        }
+        Map<UUID, Integer> prCountBySession = prCountsBySession(sessions, logsBySession, equipById);
 
         return sessions.stream()
                 .map(s -> {
@@ -370,6 +335,84 @@ public class SessionService {
     }
 
     /**
+     * Month calendar: for each day the user trained in {@code ym}, which body parts were hit
+     * (ordered by sets desc, for the coloured dots), the day's total sets/volume/duration, and a
+     * compact per-exercise breakdown for the day sheet. Days with no training are simply absent.
+     */
+    @Transactional(readOnly = true)
+    public List<CalendarDayResponse> calendar(UUID userId, java.time.YearMonth ym) {
+        List<WorkoutSession> all = sessionRepo.findByUserIdOrderByCreatedAtDesc(userId);
+        List<WorkoutSession> inMonth = all.stream()
+                .filter(s -> s.getCreatedAt() != null
+                        && s.getCreatedAt().getYear() == ym.getYear()
+                        && s.getCreatedAt().getMonthValue() == ym.getMonthValue())
+                .toList();
+        if (inMonth.isEmpty()) return List.of();
+
+        // Load ALL logs (PR detection needs full history) + exercises.
+        Map<UUID, List<WorkoutLog>> logsBySession = groupLogsBySession(all);
+        Set<UUID> exIds = new HashSet<>();
+        for (List<WorkoutLog> group : logsBySession.values()) {
+            for (WorkoutLog l : group) exIds.add(l.getExerciseId());
+        }
+        Map<UUID, Exercise> exById = exerciseRepo.findAllById(exIds).stream()
+                .collect(Collectors.toMap(Exercise::getId, Function.identity()));
+        Map<UUID, String> equipById = new HashMap<>();
+        exById.forEach((id, e) -> equipById.put(id, e.getEquipment() == null ? "" : e.getEquipment()));
+        Map<UUID, Integer> prBySession = prCountsBySession(all, logsBySession, equipById);
+
+        // Group the month's sessions by local date (a day may hold >1 session).
+        Map<java.time.LocalDate, List<WorkoutSession>> byDate = new TreeMap<>();
+        for (WorkoutSession s : inMonth) {
+            byDate.computeIfAbsent(s.getCreatedAt().toLocalDate(), k -> new ArrayList<>()).add(s);
+        }
+
+        List<CalendarDayResponse> out = new ArrayList<>();
+        for (Map.Entry<java.time.LocalDate, List<WorkoutSession>> en : byDate.entrySet()) {
+            LinkedHashMap<UUID, int[]> setsReps = new LinkedHashMap<>(); // exerciseId -> [sets, totalReps]
+            Map<UUID, BigDecimal> topW = new HashMap<>();
+            Map<String, Integer> partSets = new LinkedHashMap<>();
+            int totalSets = 0, prCount = 0;
+            BigDecimal totalVol = BigDecimal.ZERO;
+            Integer totalDur = null;
+            for (WorkoutSession s : en.getValue()) {
+                prCount += prBySession.getOrDefault(s.getId(), 0);
+                if (s.getDurationMinutes() != null) totalDur = (totalDur == null ? 0 : totalDur) + s.getDurationMinutes();
+                for (WorkoutLog l : logsBySession.getOrDefault(s.getId(), List.of())) {
+                    UUID ex = l.getExerciseId();
+                    int[] sr = setsReps.computeIfAbsent(ex, k -> new int[2]);
+                    sr[0]++;
+                    if (l.getReps() != null) sr[1] += l.getReps();
+                    totalSets++;
+                    if (l.getWeight() != null) {
+                        topW.merge(ex, l.getWeight(), (a, b) -> b.compareTo(a) > 0 ? b : a);
+                        if (l.getReps() != null) totalVol = totalVol.add(l.getWeight().multiply(BigDecimal.valueOf(l.getReps())));
+                    }
+                    Exercise e = exById.get(ex);
+                    String bp = (e == null || e.getBodyPart() == null) ? "其他" : e.getBodyPart();
+                    partSets.merge(bp, 1, Integer::sum);
+                }
+            }
+            List<String> bodyParts = partSets.entrySet().stream()
+                    .sorted((a, b) -> b.getValue() - a.getValue())
+                    .map(Map.Entry::getKey).toList();
+            List<CalendarDayResponse.ExerciseBrief> exercises = setsReps.entrySet().stream()
+                    .sorted((a, b) -> b.getValue()[0] - a.getValue()[0])
+                    .map(e2 -> {
+                        Exercise e = exById.get(e2.getKey());
+                        return new CalendarDayResponse.ExerciseBrief(
+                                e2.getKey(),
+                                e == null ? "(已删除动作)" : e.getName(),
+                                (e == null || e.getBodyPart() == null) ? "其他" : e.getBodyPart(),
+                                e2.getValue()[0], topW.get(e2.getKey()), e2.getValue()[1]);
+                    }).toList();
+            out.add(new CalendarDayResponse(en.getKey(), bodyParts, totalSets, totalVol,
+                    totalDur, en.getValue().size(), prCount, exercises));
+        }
+        return out;
+    }
+
+    /**
      * Import sessions from a JSON backup. Idempotent by session finish-instant (duplicates skipped).
      * Exercises are matched by id then by name; unmatched names are auto-created (with body part).
      */
@@ -441,6 +484,52 @@ public class SessionService {
         require(userId, sessionId);
         logRepo.deleteBySessionId(sessionId);
         sessionRepo.deleteById(sessionId);
+    }
+
+    /**
+     * PR count per session. Walks oldest→newest tracking running records per exercise; a session
+     * earns a PR for an exercise when it BEATS an existing record (weight for weighted moves, total
+     * session reps for bodyweight moves) — first-ever occurrences don't count (nothing to beat).
+     * {@code sessionsDesc} is newest-first (as the repo returns).
+     */
+    private Map<UUID, Integer> prCountsBySession(List<WorkoutSession> sessionsDesc,
+                                                 Map<UUID, List<WorkoutLog>> logsBySession,
+                                                 Map<UUID, String> equipById) {
+        Map<UUID, BigDecimal> maxWeight = new HashMap<>();
+        Map<UUID, Integer> maxSessionReps = new HashMap<>();
+        Map<UUID, Integer> prCountBySession = new HashMap<>();
+        List<WorkoutSession> chrono = new ArrayList<>(sessionsDesc);
+        Collections.reverse(chrono);
+        for (WorkoutSession s : chrono) {
+            Map<UUID, BigDecimal> sMaxW = new HashMap<>();
+            Map<UUID, Integer> sSumReps = new HashMap<>();
+            for (WorkoutLog l : logsBySession.getOrDefault(s.getId(), List.of())) {
+                if (l.getReps() != null) sSumReps.merge(l.getExerciseId(), l.getReps(), Integer::sum);
+                if (l.getWeight() != null) sMaxW.merge(l.getExerciseId(), l.getWeight(),
+                        (a, b) -> b.compareTo(a) > 0 ? b : a);
+            }
+            Set<UUID> exInSession = new HashSet<>();
+            exInSession.addAll(sMaxW.keySet());
+            exInSession.addAll(sSumReps.keySet());
+            int cnt = 0;
+            for (UUID ex : exInSession) {
+                if ("自重".equals(equipById.get(ex))) {
+                    Integer sr = sSumReps.get(ex);
+                    if (sr == null) continue;
+                    Integer prev = maxSessionReps.get(ex);
+                    if (prev != null && sr > prev) cnt++;
+                    if (prev == null || sr > prev) maxSessionReps.put(ex, sr);
+                } else {
+                    BigDecimal sw = sMaxW.get(ex);
+                    if (sw == null) continue;
+                    BigDecimal prev = maxWeight.get(ex);
+                    if (prev != null && sw.compareTo(prev) > 0) cnt++;
+                    if (prev == null || sw.compareTo(prev) > 0) maxWeight.put(ex, sw);
+                }
+            }
+            prCountBySession.put(s.getId(), cnt);
+        }
+        return prCountBySession;
     }
 
     /** All logs for the given sessions in ONE query, grouped by session id (empty list for logless sessions). */

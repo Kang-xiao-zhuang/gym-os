@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../body/body_page.dart';
+import '../calendar/calendar_page.dart';
 import '../profile/profile_page.dart';
 import '../workout/plans_page.dart';
 import 'today_home_page.dart';
@@ -20,6 +21,7 @@ class _MainShellState extends State<MainShell> {
   static const _pages = [
     TodayHomePage(),
     PlansPage(),
+    CalendarPage(),
     BodyPage(),
     ProfilePage(),
   ];
@@ -34,6 +36,7 @@ class _MainShellState extends State<MainShell> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.wb_sunny_outlined), selectedIcon: Icon(Icons.wb_sunny), label: '今天', tooltip: ''),
           NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month), label: '计划', tooltip: ''),
+          NavigationDestination(icon: Icon(Icons.calendar_view_month_outlined), selectedIcon: Icon(Icons.calendar_view_month), label: '训练历', tooltip: ''),
           NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights), label: '数据', tooltip: ''),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '我的', tooltip: ''),
         ],
