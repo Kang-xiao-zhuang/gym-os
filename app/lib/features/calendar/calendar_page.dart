@@ -8,6 +8,7 @@ import '../history/session_providers.dart';
 import '../workout/quick_workout_page.dart';
 import 'calendar_models.dart';
 import 'calendar_providers.dart';
+import 'next_up_card.dart';
 
 /// Month calendar ("训练历"): a real calendar grid with large cells that show
 /// each day's exercises inline (Google-Calendar style), plus a consistency
@@ -81,14 +82,11 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
 
   Widget _content(BuildContext context, List<CalendarDay> days) {
     final byDay = {for (final d in days) d.date.day: d};
-    final nextUp = ref.watch(nextUpProvider).value;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (nextUp != null && nextUp.exercises.isNotEmpty) ...[
-          _nextUpCard(context, nextUp),
-          const SizedBox(height: AppTheme.gap),
-        ],
+        const NextUpCard(),
+        const SizedBox(height: AppTheme.gap),
         _summaryCard(context, days),
         const SizedBox(height: AppTheme.gap),
         _weekHeader(context),
@@ -98,90 +96,6 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
         _legend(context),
       ],
     );
-  }
-
-  // ---- 下一站(计划轮换建议)----
-  Widget _nextUpCard(BuildContext context, NextUp n) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppTheme.radius),
-        gradient: LinearGradient(
-          colors: [scheme.primary, scheme.primary.withValues(alpha: 0.72)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(n.planIcon ?? '🏋️', style: const TextStyle(fontSize: 22)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('下一站 · ${n.dayTitle}',
-                        style: TextStyle(color: scheme.onPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
-                    Text(
-                      n.lastDoneTitle == null ? n.planName : '${n.planName} · 上次练了「${n.lastDoneTitle}」',
-                      style: TextStyle(color: scheme.onPrimary.withValues(alpha: 0.85), fontSize: 12),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final ex in n.exercises)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: scheme.onPrimary.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    ex.targetLabel.isEmpty ? ex.name : '${ex.name} ${ex.targetLabel}',
-                    style: TextStyle(color: scheme.onPrimary, fontSize: 12, fontWeight: FontWeight.w500),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: scheme.onPrimary, foregroundColor: scheme.primary),
-              onPressed: () => _startNextUp(n),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('开始训练'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _startNextUp(NextUp n) async {
-    final rootNav = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    final all = await ref.read(exerciseListProvider.future);
-    final ids = n.exercises.map((e) => e.exerciseId).toSet();
-    final picked = <Exercise>[for (final e in all) if (ids.contains(e.id)) e];
-    if (picked.isEmpty) {
-      messenger.showSnackBar(const SnackBar(content: Text('这天的动作在动作库里找不到了')));
-      return;
-    }
-    rootNav.push(MaterialPageRoute(builder: (_) => QuickWorkoutPage(initialExercises: picked)));
   }
 
   Widget _legend(BuildContext context) {
@@ -253,20 +167,23 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
             ? '今天已经练了 💪'
             : '已 $daysSince 天没练';
     final warn = daysSince != null && daysSince >= 3;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.local_fire_department, size: 15, color: scheme.primary),
-        const SizedBox(width: 4),
-        Text('本周 $thisWeek 次', style: TextStyle(fontSize: 12.5, color: scheme.onSurface, fontWeight: FontWeight.w600)),
-        Text('  ·  ', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
-        Text(restText,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: warn ? scheme.error : scheme.onSurfaceVariant,
-            )),
-      ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.local_fire_department, size: 15, color: scheme.primary),
+          const SizedBox(width: 4),
+          Text('本周 $thisWeek 次', style: TextStyle(fontSize: 12.5, color: scheme.onSurface, fontWeight: FontWeight.w600)),
+          Text('  ·  ', style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant)),
+          Text(restText,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: warn ? scheme.error : scheme.onSurfaceVariant,
+              )),
+        ],
+      ),
     );
   }
 

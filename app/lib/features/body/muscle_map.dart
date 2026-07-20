@@ -61,7 +61,23 @@ class MuscleMapCard extends ConsumerWidget {
       loading: () => const SizedBox(height: 300, child: Center(child: CircularProgressIndicator())),
       error: (e, _) => const SizedBox.shrink(),
       data: (sets) {
-        if (sets.isEmpty) return const SizedBox.shrink();
+        if (sets.isEmpty) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.pad),
+              child: Row(
+                children: [
+                  const Text('💪', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('练了就点亮身体 —— 记录训练后,对应肌群会在这里逐渐亮起来',
+                        style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         final maxSets = sets.values.fold<int>(0, (a, b) => b > a ? b : a);
         final intensity = <String, double>{
           for (final p in _mappedParts) p: maxSets == 0 ? 0 : (sets[p] ?? 0) / maxSets,

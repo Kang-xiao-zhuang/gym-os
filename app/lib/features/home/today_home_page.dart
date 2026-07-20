@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
+import '../calendar/next_up_card.dart';
 import '../history/session_providers.dart';
 import '../profile/profile_providers.dart';
 import '../stats/stats_util.dart';
@@ -40,6 +41,8 @@ class TodayHomePage extends ConsumerWidget {
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: AppTheme.pad),
             const _WeekSummary(),
+            const NextUpCard(),
+            const SizedBox(height: AppTheme.gap),
             const TodaySection(),
             const SizedBox(height: AppTheme.gap),
             const _QuickEntry(),
